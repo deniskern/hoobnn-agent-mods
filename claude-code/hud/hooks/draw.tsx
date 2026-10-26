@@ -2,7 +2,7 @@
 // (above or below the prompt) and the `/hud detail` pane.
 import type { Elements, RenderElement } from 'claude-code'
 
-import type { HudLine, ToolStats, TurnCost } from '../types'
+import type { Desk, DeskItem, HudLine, ToolStats, TurnCost } from '../types'
 import { formatDuration, lastDays, sparkline, streak } from './extras.js'
 import type { AgentEntry, TodoItem } from './hud/types.js'
 import { formatTokens } from './hud/utils/format.js'
@@ -47,6 +47,42 @@ export function drawRows(ui: Ui, rows: HudLine[], rest: RenderElement, indent = 
           })}
         </Box>
       ))}
+      {rest}
+    </Box>
+  )
+}
+
+/**
+ * The HUD on a surface with a type of its own (the desktop app, a phone, an editor):
+ * small readings that wrap, a dim label before each value, the theme's warning colors.
+ */
+export function drawDesk(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, desk: Desk, rest: RenderElement): RenderElement {
+  const { Box, Text } = ui
+  const item = (it: DeskItem, key: string) => (
+    <Box key={key} flexDirection="row" columnGap={1}>
+      {it.label ? <Text size="footnote" dimColor>{it.label}</Text> : null}
+      <Text
+        size="footnote"
+        tabular
+        weight={it.tone === undefined || it.isMuted ? 'regular' : 'medium'}
+        color={it.tone === 'bad' ? 'error' : it.tone === 'warn' ? 'warning' : undefined}
+        dimColor={it.isMuted === true && it.tone === undefined}
+      >
+        {it.value}
+      </Text>
+      {it.hint ? <Text size="footnote" dimColor>{it.hint}</Text> : null}
+    </Box>
+  )
+  const row = (items: DeskItem[], name: string) =>
+    items.length === 0 ? null : (
+      <Box key={name} flexDirection="row" flexWrap="wrap" columnGap="lg">
+        {items.map((it, i) => item(it, `${name}${i}`))}
+      </Box>
+    )
+  return (
+    <Box flexDirection="column">
+      {row(desk.gauges, 'g')}
+      {row(desk.notes, 'n')}
       {rest}
     </Box>
   )

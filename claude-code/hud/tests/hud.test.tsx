@@ -164,7 +164,7 @@ test('https links ride on spans, file links drop', async () => {
 const SURFACES = ['terminal', 'desktop'] as const
 const HINT = { component: 'PromptHint', props: { isDraft: false, isWorking: false, hint: '? for shortcuts' } } as const
 
-test('band renders claude-hud lines from the session on every surface', async ($, on) => {
+test('band renders claude-hud lines from the session in the terminal', async ($, on) => {
   const clock = host(on)
   on('ui.render', ($, e) => {
     const { Box } = $.ui.resolve(e)
@@ -172,8 +172,8 @@ test('band renders claude-hud lines from the session on every surface', async ($
   })
   await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
   for (let i = 0; i < 30; i++) await clock.settle()
-  for (const surface of SURFACES) {
-    const ui = await $.ui.mount({ plugin: 'hud', surface, ...BAND })
+  {
+    const ui = await $.ui.mount({ plugin: 'hud', surface: 'terminal', ...BAND })
     const shown = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
     expect(/Opus 5\.5/.test(shown)).toBe(true)
     expect(/proj git:\(main\*\)/.test(shown)).toBe(true)
@@ -203,31 +203,40 @@ test('position below draws under the terminal prompt, and above it where no Prom
   const band = await $.ui.mount({ plugin: 'hud', surface: 'terminal', ...BAND })
   expect(await band.find({ type: 'Text', text: /Opus/ })).toBeUndefined()
   await band.unmount()
-  // The desktop app raises no PromptHint: the rows go above its prompt.
+  // The desktop app raises no PromptHint: the HUD goes above its prompt.
   const remote = await $.ui.mount({ plugin: 'hud', surface: 'desktop', ...BAND })
-  expect(await remote.find({ type: 'Text', text: /Opus/ })).toBeDefined()
+  expect(await remote.find({ type: 'Text', text: '25%' })).toBeDefined()
   await remote.unmount()
 })
 
-test('a session the desktop app hosts leaves the model, the context bar and the tools to the app', async ($, on) => {
+test('a remote surface draws the readings as words; the desktop leaves the context to its side panel', async ($, on) => {
   const clock = host(on)
   on('ui.render', ($, e) => {
     const { Box } = $.ui.resolve(e)
     return <Box key="core" />
   })
+  const texts = async (surface: 'desktop' | 'mobile') => {
+    const ui = await $.ui.mount({ plugin: 'hud', surface, ...BAND })
+    const all = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    await ui.unmount()
+    return all
+  }
+  // A terminal session with a phone attached: the phone's HUD has the context.
+  await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+  for (let i = 0; i < 30; i++) await clock.settle()
+  let shown = await texts('mobile')
+  expect(shown).toContain('45k/200k')
+  expect(shown).toContain('25%')
+  // Words only: no model, no bars, no padded rows.
+  expect(shown.some(t => /Opus|[█░│]/.test(t))).toBe(false)
+
   await $.session.start({ cwd: CWD, surface: 'desktop', isInteractive: false })
   await $.session.attach({ surface: 'desktop', clientId: 'desktop-1', viewport: { columns: 98, rows: 52, isFullscreen: true } })
   for (let i = 0; i < 30; i++) await clock.settle()
-  const ui = await $.ui.mount({ plugin: 'hud', surface: 'desktop', ...BAND })
-  const shown = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
-  expect(/proj git:\(main\*\)/.test(shown)).toBe(true)
-  expect(/45k\/200k/.test(shown)).toBe(true)
-  expect(/25%/.test(shown)).toBe(true)
-  expect(/Opus 5\.5/.test(shown)).toBe(false)
-  expect(/◐ Read/.test(shown)).toBe(false)
-  // The usage bar stays; the context's bar goes.
-  expect(/[█░]\s*45k/.test(shown)).toBe(false)
-  await ui.unmount()
+  shown = await texts('desktop')
+  expect(shown).not.toContain('45k/200k')
+  expect(shown).toContain('25%')
+  expect(shown.some(t => /Opus|◐ Read|[█░│]/.test(t))).toBe(false)
 })
 
 test('rc label links the bridge session and names attached clients by surface', async () => {

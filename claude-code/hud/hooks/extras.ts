@@ -1,7 +1,7 @@
 // What the mod adds to claude-hud's lines: alerts, a usage forecast, today's
 // spend against a budget, the spend history, a git nag and the task summary.
 // Pure helpers; register.tsx feeds them from `$` and draws the row.
-import type { HudLine, TurnCost } from '../types'
+import type { Desk, DeskItem, HudLine, TurnCost } from '../types'
 import { textWidth } from './hud/render/ansi.js'
 import { formatTokens } from './hud/utils/format.js'
 import { m, money } from './i18n.js'
@@ -355,4 +355,52 @@ export function chimeWav(): string {
   samples.forEach((s, i) => buf.setInt16(44 + i * 2, s, true))
   chime = base64(new Uint8Array(buf.buffer))
   return chime
+}
+
+export type DeskInput = ExtrasInput & {
+  /** The context's size and use; null leaves it to the surface (the desktop's side panel). */
+  context: { tokens: number; size: number; percent: number } | null
+  /** Each usage window: its label, how much is used, when it resets (ms). */
+  limits: { label: string; percent: number; resetsAt: number | null }[]
+  /** When the warm prompt cache expires (ms), and how early to warn; null when cold or unknown. */
+  cache: { until: number; warnMs: number } | null
+  durationMs: number | null
+  now: number
+}
+
+const toneOf = (percent: number): DeskItem['tone'] => (percent >= 90 ? 'bad' : percent >= 75 ? 'warn' : undefined)
+
+/**
+ * The HUD for a surface that draws in a proportional face (the desktop app, a
+ * phone, an editor): readings as words, no bars, sparklines or padded columns,
+ * and nothing the desktop already shows (model, effort, project, branch, tools).
+ */
+export function deskOf(x: DeskInput): Desk {
+  const gauges: DeskItem[] = []
+  if (x.context) {
+    const { tokens, size, percent } = x.context
+    gauges.push({ label: m('desk.context'), value: `${formatTokens(tokens)}/${formatTokens(size)}`, hint: `${Math.round(percent)}%`, tone: toneOf(percent) })
+  }
+  for (const w of x.limits) {
+    const left = w.resetsAt !== null && w.resetsAt > x.now ? m('desk.resets', { d: formatDuration(w.resetsAt - x.now) }) : undefined
+    gauges.push({ label: w.label, value: `${Math.round(w.percent)}%`, hint: left, tone: toneOf(w.percent) })
+  }
+  if (x.cache && x.cache.until > x.now) {
+    gauges.push({ value: m('desk.cache', { time: clockTime(x.cache.until) }), tone: x.cache.until - x.now <= x.cache.warnMs ? 'warn' : undefined, isMuted: true })
+  }
+  if (x.durationMs !== null && x.durationMs > 0) gauges.push({ value: `⏱ ${formatDuration(x.durationMs)}`, isMuted: true })
+
+  const notes: DeskItem[] = []
+  if (x.summary) notes.push({ value: `✎ ${x.summary}`, isMuted: true })
+  for (const { label, at } of x.exhaust) notes.push({ value: m('forecast', { label, time: clockTime(at) }), tone: 'warn' })
+  if (typeof x.compactLeft === 'number') notes.push({ value: m('compact.left', { tokens: formatTokens(Math.max(0, x.compactLeft)) }), tone: 'warn' })
+  if (typeof x.coldCache === 'number') notes.push({ value: m('cache.cold', { tokens: formatTokens(x.coldCache) }), tone: 'warn' })
+  if (x.growth) notes.push({ value: m('turn.growth', { tokens: formatTokens(x.growth.last) }), isMuted: true })
+  if (x.budgetUsd > 0 && x.todayUsd !== null) {
+    const ratio = x.todayUsd / x.budgetUsd
+    notes.push({ value: m('spend.today', { spent: `${money(x.todayUsd)}/${money(x.budgetUsd)}` }), tone: ratio >= 1 ? 'bad' : ratio >= 0.8 ? 'warn' : undefined, isMuted: ratio < 0.8 })
+  }
+  if (x.git && x.gitDirtyWarn > 0 && x.git.dirty >= x.gitDirtyWarn) notes.push({ value: `⚠ ${m('git.dirty', { n: x.git.dirty })}`, tone: 'warn' })
+  if (x.git && x.gitAheadWarn > 0 && x.git.ahead >= x.gitAheadWarn) notes.push({ value: `⚠ ${m('git.ahead', { n: x.git.ahead })}`, tone: 'warn' })
+  return { gauges, notes }
 }

@@ -50,6 +50,9 @@ type Key =
   | 'spend.today'
   | 'spend.week'
   | 'summary.language'
+  | 'desk.context'
+  | 'desk.cache'
+  | 'desk.resets'
 
 // French (and German, Spanish, Russian) set a percent sign off with a space; French
 // also a colon. A no-break space keeps the sign on its number.
@@ -101,6 +104,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': 'Today {spent}',
     'spend.week': '7 days {spent}',
     'summary.language': 'English',
+    'desk.context': 'context',
+    'desk.cache': 'cache until {time}',
+    'desk.resets': 'resets in {d}',
   },
   'zh-Hans': {
     'rc.label': '⇄ 远程控制',
@@ -147,6 +153,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': '今日 {spent}',
     'spend.week': '7 天 {spent}',
     'summary.language': 'Simplified Chinese',
+    'desk.context': '上下文',
+    'desk.cache': '缓存至 {time}',
+    'desk.resets': '{d} 后重置',
   },
   'zh-Hant': {
     'rc.label': '⇄ 遠端控制',
@@ -193,6 +202,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': '今日 {spent}',
     'spend.week': '7 天 {spent}',
     'summary.language': 'Traditional Chinese as used in Taiwan',
+    'desk.context': '上下文',
+    'desk.cache': '快取至 {time}',
+    'desk.resets': '{d} 後重置',
   },
   ja: {
     'rc.label': '⇄ リモートコントロール',
@@ -239,6 +251,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': '今日 {spent}',
     'spend.week': '7日間 {spent}',
     'summary.language': 'Japanese',
+    'desk.context': 'コンテキスト',
+    'desk.cache': 'キャッシュ {time} まで',
+    'desk.resets': '{d} 後にリセット',
   },
   ko: {
     'rc.label': '⇄ 원격 제어',
@@ -285,6 +300,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': '오늘 {spent}',
     'spend.week': '7일 {spent}',
     'summary.language': 'Korean',
+    'desk.context': '컨텍스트',
+    'desk.cache': '캐시 {time}까지',
+    'desk.resets': '{d} 후 초기화',
   },
   es: {
     'rc.label': '⇄ Control remoto',
@@ -331,6 +349,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': 'Hoy: {spent}',
     'spend.week': '7 días: {spent}',
     'summary.language': 'Spanish',
+    'desk.context': 'contexto',
+    'desk.cache': 'caché hasta las {time}',
+    'desk.resets': 'se reinicia en {d}',
   },
   fr: {
     'rc.label': '⇄ Contrôle à distance',
@@ -377,6 +398,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': `Aujourd’hui${NB}: {spent}`,
     'spend.week': `7 jours${NB}: {spent}`,
     'summary.language': 'French',
+    'desk.context': 'contexte',
+    'desk.cache': 'cache jusqu’à {time}',
+    'desk.resets': 'réinitialisé dans {d}',
   },
   de: {
     'rc.label': '⇄ Fernsteuerung',
@@ -423,6 +447,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': 'Heute: {spent}',
     'spend.week': '7 Tage: {spent}',
     'summary.language': 'German',
+    'desk.context': 'Kontext',
+    'desk.cache': 'Cache bis {time}',
+    'desk.resets': 'zurückgesetzt in {d}',
   },
   'pt-BR': {
     'rc.label': '⇄ Controle remoto',
@@ -469,6 +496,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': 'Hoje: {spent}',
     'spend.week': '7 dias: {spent}',
     'summary.language': 'Brazilian Portuguese',
+    'desk.context': 'contexto',
+    'desk.cache': 'cache até {time}',
+    'desk.resets': 'reinicia em {d}',
   },
   ru: {
     'rc.label': '⇄ Удалённое управление',
@@ -525,6 +555,9 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.today': 'Сегодня: {spent}',
     'spend.week': '7 дн.: {spent}',
     'summary.language': 'Russian',
+    'desk.context': 'контекст',
+    'desk.cache': 'кэш до {time}',
+    'desk.resets': 'сброс через {d}',
   },
 }
 

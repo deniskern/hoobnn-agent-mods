@@ -14,6 +14,12 @@ export type Span = {
 
 export type HudLine = Span[]
 
+/** One reading on a remote surface's HUD: a dim label, the value, a dim note after it. */
+export type DeskItem = { label?: string; value: string; hint?: string; tone?: 'warn' | 'bad'; isMuted?: boolean }
+
+/** The HUD a remote surface draws in its own type: the gauges, then what the extras row says. */
+export type Desk = { gauges: DeskItem[]; notes: DeskItem[] }
+
 /** What the statusline's stdin carried and only the turn's requests reveal. */
 export type StepInfo = {
   model: string | null
@@ -74,6 +80,7 @@ declare module 'claude-code' {
   interface PluginState {
     hud: {
       lines: HudLine[]
+      desk: Desk
       isHidden: boolean | null
       step: StepInfo
       /** Remote clients attached (a phone, the web), not the terminal. */

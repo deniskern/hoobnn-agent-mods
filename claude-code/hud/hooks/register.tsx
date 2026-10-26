@@ -10,11 +10,12 @@ import './shims/globals.js'
 import { atom, derive, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { DockPet, Fired, HudLine, Remote, StepInfo, ToolStats, TurnCost } from '../types'
+import type { Desk, DockPet, Fired, HudLine, Remote, StepInfo, ToolStats, TurnCost } from '../types'
 import { readConfig } from './config.js'
-import { drawPane, drawRows } from './draw.js'
-import { addSample, appendExtras, chimeWav, crossThresholds, exhaustAt, extrasLine, formatDuration, growthOf, lastDays, localDay, paceAt, pruneHistory, streak } from './extras.js'
-import type { Samples } from './extras.js'
+import { drawDesk, drawPane, drawRows } from './draw.js'
+import { getContextUsage } from './hud/stdin.js'
+import { addSample, appendExtras, chimeWav, crossThresholds, deskOf, exhaustAt, extrasLine, formatDuration, growthOf, lastDays, localDay, paceAt, pruneHistory, streak } from './extras.js'
+import type { ExtrasInput, Samples } from './extras.js'
 import { loadConfig, setConfigPatch } from './hud/config.js'
 import { setLanguage } from './hud/i18n/index.js'
 import { setTranscriptProvider } from './hud/transcript.js'
@@ -36,6 +37,8 @@ import type { Theme } from './themes.js'
 import { transcriptData } from './transcript-feed.js'
 
 const lines = atom({ plugin: 'hud', key: 'lines' } as const, [] as HudLine[])
+// The same readings for a surface that draws in its own type (see deskOf).
+const desk = atom({ plugin: 'hud', key: 'desk' } as const, { gauges: [], notes: [] } as Desk)
 // Set this session by `/hud` or session.start; null in a session resumed or
 // cleared, which gets no session.start: `isHidden` is the `visible` row's then.
 const hiddenSet = atom({ plugin: 'hud', key: 'isHidden' } as const, null as boolean | null)
@@ -163,21 +166,15 @@ export const register: Register = (on, options) => {
   const config = readConfig(options)
   isRowHidden = !config.isVisible
   useTheme(config.theme)
-  // A session the desktop app hosts: no terminal, the desktop attached. Its footer names the
-  // model and effort, its side panel draws the context, and the transcript the tools and the
-  // plan, so those parts of claude-hud step aside there.
+  // A session the desktop app hosts: no terminal, the desktop attached. Its side panel
+  // draws the context, so the desktop's HUD leaves it out.
   let isHeadless = false
   let isDesktop = false
   setConfigPatch(hud => {
     const themed = applyPalette(hud, live.theme)
     // Claude Code lists running subagents itself, with their time and tokens; claude-hud's
     // agent lines would repeat them, so they show only when asked for.
-    const display = config.hasAgents && !isDesktop ? themed.display : { ...themed.display, showAgents: false }
-    if (!isDesktop) return { ...themed, display }
-    return {
-      ...themed,
-      display: { ...display, showModel: false, showEffortLevel: false, showContextBar: false, showTools: false, showTodos: false },
-    }
+    return config.hasAgents ? themed : { ...themed, display: { ...themed.display, showAgents: false } }
   })
   let isSummarizing = false
   // Set in session.start: everything that outlives one dispatch calls the
@@ -279,7 +276,7 @@ export const register: Register = (on, options) => {
               ...scoped.map(w => ({ label: m('limit.scoped', { name: w.name }), at: exhaustAt(w.percent, w.resetsAt, SEVEN_DAY_WINDOW_MS, now) })),
             ].flatMap(({ label, at }) => (at === null ? [] : [{ label, at }]))
           : []
-        const extra = extrasLine({
+        const extrasInput: ExtrasInput = {
           summary: await read($, summary),
           exhaust,
           todayUsd,
@@ -295,7 +292,8 @@ export const register: Register = (on, options) => {
           style: live.theme.extras,
           // spinner's pet stands in for the theme's mascot below the prompt.
           mascot: config.hasMascot && live.theme.mascot && !pet ? live.theme.mascot[mood(stdin)] : null,
-        })
+        }
+        const extra = extrasLine(extrasInput)
         const all = applyTheme(appendExtras(rows, extra, fitColumns()), live.theme)
         // The pet moves in beside the rows when it fits, and out when it does not.
         const widest = Math.max(0, ...all.map(row => row.reduce((sum, span) => sum + cellWidth(span.text), 0)))
@@ -305,6 +303,26 @@ export const register: Register = (on, options) => {
         live.lastLines = all.map(row => row.map(span => span.text).join(''))
         live.lastError = null
         await update($, lines, () => all)
+        const cache = stdin.prompt_cache
+        const ttlSeconds = cache?.ttl === '1h' ? 3600 : 300
+        // claude-hud's own reading: Claude Code's percent, else the request's tokens.
+        const used = getContextUsage(stdin)
+        await update($, desk, () =>
+          deskOf({
+            ...extrasInput,
+            context: !isDesktop && used.size > 0 && used.tokens > 0 ? used : null,
+            limits: [
+              ...(typeof five?.used_percentage === 'number' ? [{ label: '5h', percent: five.used_percentage, resetsAt: five.resets_at ? five.resets_at * 1000 : null }] : []),
+              ...(typeof limits?.seven_day?.used_percentage === 'number'
+                ? [{ label: '7d', percent: limits.seven_day.used_percentage, resetsAt: limits.seven_day.resets_at ? limits.seven_day.resets_at * 1000 : null }]
+                : []),
+              ...scoped.map(w => ({ label: w.name, percent: w.percent, resetsAt: w.resetsAt === null ? null : w.resetsAt * 1000 })),
+            ],
+            cache: cache?.warm && typeof cache.expires_at === 'number' ? { until: cache.expires_at * 1000, warnMs: Math.max(60, ttlSeconds / 5) * 1000 } : null,
+            durationMs: stdin.cost?.total_duration_ms ?? null,
+            now,
+          }),
+        )
       } catch (err) {
         live.lastError = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err)
       } finally {
@@ -639,10 +657,15 @@ export const register: Register = (on, options) => {
     // Two cells in, as the engine indents the lines under the prompt. Below a terminal's
     // prompt the terminal's width is the one the rows are fitted to.
     if (config.position === 'above' || isHeadless) trackWidth(e.props.bodyColumns - 2)
-    const rows = await read($, lines)
-    if (e.props.hasSurvey || rows.length === 0 || (await read($, isHidden)) || (await read($, isPicking))) {
-      return next(e)
+    if (e.props.hasSurvey || (await read($, isHidden)) || (await read($, isPicking))) return next(e)
+    // A remote surface draws in its own type: the readings as words, not the terminal's rows.
+    if (e.surface !== 'terminal') {
+      const shown = await read($, desk)
+      if (shown.gauges.length === 0 && shown.notes.length === 0) return next(e)
+      return drawDesk($.ui.resolve(e), shown, await next(e))
     }
+    const rows = await read($, lines)
+    if (rows.length === 0) return next(e)
 
     return drawRows($.ui.resolve(e), rows, await next(e), 2)
   })
