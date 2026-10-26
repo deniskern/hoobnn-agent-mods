@@ -126,6 +126,9 @@ export class Parser {
   private mcpErrors = new Set<string>();
   private todos: TodoItem[] = [];
   private taskIndex = new Map<string, number>();
+  // hud mod: Claude Code logs an assistant message again after its tool results, so a
+  // tool_use seen twice would be marked running again (and a TaskCreate counted twice).
+  private seenToolUses = new Set<string>();
   private agentCompletions = new Map<string, Date>();
   // Claude Code logs one API response several times, sometimes non-adjacently, so usage
   // is the per-field max per message id. Ids evicted to bound memory settle into `settled`.
@@ -225,6 +228,8 @@ export class Parser {
   }
 
   private toolUse(block: Block, at: Date): void {
+    if (this.seenToolUses.has(block.id as string)) return;
+    this.seenToolUses.add(block.id as string);
     const toolName = block.name as string;
     const input = block.input;
     const skill = toolName === 'Skill' ? name(input?.skill) : undefined;

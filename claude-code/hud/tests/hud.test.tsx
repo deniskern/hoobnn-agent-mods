@@ -1,9 +1,13 @@
 import type { On, SessionMeasureInput } from 'claude-code'
 import { type Engine, expect, mock, test } from 'claude-code/testing'
 
+// claude-hud's modules read Node's globals as they load.
+import '../hooks/shims/globals'
+
 import { parseAnsi } from '../hooks/ansi'
 import { addDays, addSample, appendExtras, chimeWav, crossThresholds, dimSeparators, exhaustAt, extrasLine, growthOf, lastDays, paceAt, packRows, parseGitStatus, parseThresholds, sparkline, streak } from '../hooks/extras'
 import { setLanguage } from '../hooks/hud/i18n/index'
+import { Parser } from '../hooks/hud/transcript'
 import { MESSAGES, m, money } from '../hooks/i18n'
 import { rcSpans } from '../hooks/remote'
 import { currentScoped, usageCacheOf } from '../hooks/stdin'
@@ -322,6 +326,20 @@ test('extras fit the width: low parts drop, the row joins the last line when it 
     { text: ' │ ', dimColor: true },
     { text: 'proj', color: 'cyan' },
   ])
+})
+
+test('a tool_use logged again after its result stays finished, a TaskCreate counted once', async () => {
+  const parser = new Parser()
+  const at = '2026-10-26T05:00:00.000Z'
+  const use = JSON.stringify({ type: 'assistant', timestamp: at, message: { id: 'm1', content: [
+    { type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'ls' } },
+    { type: 'tool_use', id: 't1', name: 'TaskCreate', input: { subject: '写测试' } },
+  ] } })
+  const result = JSON.stringify({ type: 'user', timestamp: at, message: { content: [{ type: 'tool_result', tool_use_id: 'b1' }] } })
+  for (const line of [use, result, use]) parser.line(line)
+  const data = parser.finish()
+  expect(data.tools.map(tool => tool.status)).toEqual(['completed'])
+  expect(data.todos).toHaveLength(1)
 })
 
 test('short rows pack side by side where they fit; the first row stays alone', async () => {
