@@ -56,6 +56,8 @@ function host(
   })
   on('process.run', ($, e) => ({ value: { ...run(e.argv), isStdoutTruncated: false, isStderrTruncated: false } }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('session.surfaces', () => ({ value: [] }))
+  on('session.attach', ($, e) => ({ clientId: e.clientId }))
   on('ui.render', ($, e) => {
     const { Box } = $.ui.resolve(e)
     return <Box key="core" />
@@ -81,6 +83,21 @@ test('band shows nodes and online count on every surface', async ($, on) => {
     expect(await ui.find({ type: 'Text', text: 'phone ' })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('a session the desktop app hosts polls once the desktop attaches', async ($, on) => {
+  let reads = 0
+  const clock = host(on, () => (reads++, { exitCode: 0, stdout: STATUS, stderr: '' }))
+  await $.session.start({ cwd: '/tmp', surface: 'desktop', isInteractive: false })
+  await clock.settle()
+  expect(reads).toBe(0)
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-1' })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-2' })
+  await clock.settle()
+  expect(reads).toBe(1)
+  const ui = await $.ui.mount({ plugin: 'ts-band', surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: 'TS 3/4' })).toBeDefined()
+  await ui.unmount()
 })
 
 test('band shows read error', async ($, on) => {
@@ -231,6 +248,7 @@ test('the band steps aside while a picker is open', async ($, on) => {
     return { text, cursor: e.start + e.inputText.length }
   })
   on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('prompt.change', ($, e) => ({ text: e.text }))
   await $.session.start(START)
   await clock.settle()
   const shown = async () => {
@@ -245,6 +263,12 @@ test('the band steps aside while a picker is open', async ($, on) => {
   await edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: '/t' })
   expect(await shown()).toBe(false)
   await edit({ origin: { kind: 'composer' }, text: '/t', cursor: 2, start: 2, end: 2, inputText: 's ' })
+  expect(await shown()).toBe(true)
+  // A recalled `/command` from the history opens the picker with no key typed; a clear closes it.
+  const change = ($.prompt as unknown as { change: (e: object) => Promise<unknown> }).change
+  await change({ origin: { kind: 'history' }, text: '/ts', cursor: 3 })
+  expect(await shown()).toBe(false)
+  await change({ origin: { kind: 'clear' }, text: '', cursor: 0 })
   expect(await shown()).toBe(true)
 })
 

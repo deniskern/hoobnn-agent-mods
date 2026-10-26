@@ -163,11 +163,21 @@ export const register: Register = (on, options) => {
   const config = readConfig(options)
   isRowHidden = !config.isVisible
   useTheme(config.theme)
+  // A session the desktop app hosts: no terminal, the desktop attached. Its footer names the
+  // model and effort, its side panel draws the context, and the transcript the tools and the
+  // plan, so those parts of claude-hud step aside there.
+  let isHeadless = false
+  let isDesktop = false
   setConfigPatch(hud => {
     const themed = applyPalette(hud, live.theme)
     // Claude Code lists running subagents itself, with their time and tokens; claude-hud's
     // agent lines would repeat them, so they show only when asked for.
-    return config.hasAgents ? themed : { ...themed, display: { ...themed.display, showAgents: false } }
+    const display = config.hasAgents && !isDesktop ? themed.display : { ...themed.display, showAgents: false }
+    if (!isDesktop) return { ...themed, display }
+    return {
+      ...themed,
+      display: { ...display, showModel: false, showEffortLevel: false, showContextBar: false, showTools: false, showTodos: false },
+    }
   })
   let isSummarizing = false
   // Set in session.start: everything that outlives one dispatch calls the
@@ -196,6 +206,9 @@ export const register: Register = (on, options) => {
   }
 
   on('session.start', async ($, e, next) => {
+    isHeadless = !e.isInteractive
+    // After a reload the desktop is attached already and says so again to nobody.
+    isDesktop = isHeadless && (await $.session.surfaces()).includes('desktop')
     const io: Io = {
       stat: path => $.fs.stat(path, { resolve: true }),
       read: path => $.fs.read(path),
@@ -415,6 +428,7 @@ export const register: Register = (on, options) => {
   }
 
   on('session.attach', async ($, e, next) => {
+    if (e.surface === 'desktop' && isHeadless) isDesktop = true
     if (e.surface !== 'terminal') {
       await update($, remotes, all => [...all.filter(r => r.id !== e.clientId), { id: e.clientId, surface: e.surface }])
     }
@@ -563,6 +577,8 @@ export const register: Register = (on, options) => {
 
     if (config.notifyMs > 0 && e.durationMs >= config.notifyMs && e.reason === 'answer') {
       $.ui.toast(m('turn.done', { d: formatDuration(e.durationMs) }))
+      // And by the person's own notification channel, for when they have looked away.
+      void $.ui.notify(m('turn.done', { d: formatDuration(e.durationMs) }), { title: 'Claude Code' }).catch(() => {})
       if (config.hasChime) void $.audio.play({ base64: chimeWav(), mime: 'audio/wav' }).catch(() => {})
     }
     const count = await update($, turns, n => n + 1)
@@ -602,28 +618,39 @@ export const register: Register = (on, options) => {
     }
   }
 
-  if (config.position === 'above') {
-    // A picker (`/` commands, `@` files) opens above the band: the band steps aside meanwhile.
+  // A picker (`/` commands, `@` files) opens above the band: the band steps aside meanwhile.
   on('prompt.edit', async ($, e, next) => {
     const box = await next(e)
     const isOpen = isPickerOpen(box.text, box.cursor)
     if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
     return box
   })
+  // A change no key made (a history recall, a clear, a fill) opens or closes one too.
+  on('prompt.change', async ($, e, next) => {
+    const isOpen = isPickerOpen(e.text, e.cursor)
+    if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
+    return next(e)
+  })
 
+  // Above the prompt; on a remote surface too when the HUD sits below it, as the desktop
+  // app raises no PromptHint (nor does the phone or the editor).
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-      // Two cells in, as the engine indents the lines under the prompt.
-      trackWidth(e.props.bodyColumns - 2)
-      const rows = await read($, lines)
-      if (e.props.hasSurvey || rows.length === 0 || (await read($, isHidden)) || (await read($, isPicking))) {
-        return next(e)
-      }
+    if (config.position !== 'above' && e.surface === 'terminal') return next(e)
+    // Two cells in, as the engine indents the lines under the prompt. Below a terminal's
+    // prompt the terminal's width is the one the rows are fitted to.
+    if (config.position === 'above' || isHeadless) trackWidth(e.props.bodyColumns - 2)
+    const rows = await read($, lines)
+    if (e.props.hasSurvey || rows.length === 0 || (await read($, isHidden)) || (await read($, isPicking))) {
+      return next(e)
+    }
 
-      return drawRows($.ui.resolve(e), rows, await next(e), 2)
-    })
-  } else {
+    return drawRows($.ui.resolve(e), rows, await next(e), 2)
+  })
+
+  if (config.position === 'below') {
     // Under the prompt, where the statusline sat: the HUD, then the engine's hint line.
     on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+      if (e.surface !== 'terminal') return next(e)
       trackWidth(e.viewport?.columns)
       const rows = await read($, lines)
       if (rows.length === 0 || (await read($, isHidden))) {

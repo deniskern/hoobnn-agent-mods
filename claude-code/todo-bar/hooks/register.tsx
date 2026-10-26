@@ -214,27 +214,45 @@ export const register: Register = (on, options) => {
     if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
     return box
   })
+  // A change no key made (a history recall, a clear, a fill) opens or closes one too.
+  on('prompt.change', async ($, e, next) => {
+    const isOpen = isPickerOpen(e.text, e.cursor)
+    if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
+    return next(e)
+  })
   on('prompt.submit', async ($, e, next) => {
     if (await read($, isPicking)) await update($, isPicking, () => false)
     return next(e)
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    // The desktop app draws the plan and the running tasks itself, beside the transcript.
+    if (e.surface === 'desktop') return next(e)
     const now = await read($, board)
     if (e.props.hasSurvey || now === null || now.isFolded || (await read($, isHidden)) || (await read($, isPicking))) return next(e)
     const ui = $.ui.resolve(e)
     // Two cells in, as kit/band indents the band.
     await read($, tick)
     const running = config.hasAgents ? await read($, agents) : []
-    return stackAbove(ui, drawBoard(ui, now, running, e.props.bodyColumns - 2, config, await $.clock.now()), await next(e))
+    // A press on a subagent's type shows its transcript, as picking it from the tasks list does.
+    const view = (agentId: string) => void $.ui.view({ agentId })
+    return stackAbove(ui, drawBoard(ui, now, running, e.props.bodyColumns - 2, config, await $.clock.now(), view), await next(e))
   })
 }
 
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim()
 
 /** The band: the running task, a bar, the count; its subagents at work; then what comes next. Finished: a check and the time it took. */
-function drawBoard(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, now: Board, running: Agent[], columns: number, config: Config, at: number): RenderElement {
-  const { Box, Text } = ui
+function drawBoard(
+  ui: Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'>,
+  now: Board,
+  running: Agent[],
+  columns: number,
+  config: Config,
+  at: number,
+  view: (agentId: string) => void,
+): RenderElement {
+  const { Box, Button, Text } = ui
   const { done, total, current, isRunning, next } = progress(now)
   const pct = total === 0 ? 0 : Math.round((done / total) * 100)
   const count = `${done}/${total} ${String(pct).padStart(3)}%`
@@ -284,7 +302,9 @@ function drawBoard(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, now: Board, r
           <Box key={a.id} flexDirection="row" columnGap={1} paddingLeft={2}>
             <Text color="magenta">↳</Text>
             <Box flexShrink={0}>
-              <Text color="magenta">{a.type}</Text>
+              <Button key={`view-${a.id}`} plain onPress={() => view(a.id)}>
+                <Text color="magenta">{a.type}</Text>
+              </Button>
             </Box>
             <Box flexGrow={1} flexShrink={1}>
               <Text wrap="truncate-end">{a.title}</Text>

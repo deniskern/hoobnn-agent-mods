@@ -133,6 +133,8 @@ function host(on: On, stored: Record<string, unknown> | null = {}) {
     return { value: { command: e.name } }
   })
   on('tool.register', ($, e) => ({ value: { tool: e.name } }))
+  on('session.surfaces', () => ({ value: [] }))
+  on('session.attach', ($, e) => ({ clientId: e.clientId }))
   return clock
 }
 
@@ -185,7 +187,7 @@ test('band renders claude-hud lines from the session on every surface', async ($
   }
 })
 
-test('position below draws under the prompt and leaves the band alone', { options: { position: 'below' } }, async ($, on) => {
+test('position below draws under the terminal prompt, and above it where no PromptHint is raised', { options: { position: 'below' } }, async ($, on) => {
   const clock = host(on)
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -193,18 +195,40 @@ test('position below draws under the prompt and leaves the band alone', { option
   })
   await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
   for (let i = 0; i < 30; i++) await clock.settle()
-  for (const surface of SURFACES) {
-    const hint = await $.ui.mount({ plugin: 'hud', surface, ...HINT })
-    const shown = (await hint.findAll({ type: 'Text' })).map(t => t.text).join('')
-    expect(/Opus 5\.5/.test(shown)).toBe(true)
-    expect(/for shortcuts/.test(shown)).toBe(true)
-    await hint.unmount()
-    const band = await $.ui.mount({ plugin: 'hud', surface, ...BAND })
-    expect(await band.find({ type: 'Text', text: /Opus/ })).toBeUndefined()
-    await band.unmount()
-  }
+  const hint = await $.ui.mount({ plugin: 'hud', surface: 'terminal', ...HINT })
+  const shown = (await hint.findAll({ type: 'Text' })).map(t => t.text).join('')
+  expect(/Opus 5\.5/.test(shown)).toBe(true)
+  expect(/for shortcuts/.test(shown)).toBe(true)
+  await hint.unmount()
+  const band = await $.ui.mount({ plugin: 'hud', surface: 'terminal', ...BAND })
+  expect(await band.find({ type: 'Text', text: /Opus/ })).toBeUndefined()
+  await band.unmount()
+  // The desktop app raises no PromptHint: the rows go above its prompt.
+  const remote = await $.ui.mount({ plugin: 'hud', surface: 'desktop', ...BAND })
+  expect(await remote.find({ type: 'Text', text: /Opus/ })).toBeDefined()
+  await remote.unmount()
 })
 
+test('a session the desktop app hosts leaves the model, the context bar and the tools to the app', async ($, on) => {
+  const clock = host(on)
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="core" />
+  })
+  await $.session.start({ cwd: CWD, surface: 'desktop', isInteractive: false })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-1', viewport: { columns: 98, rows: 52, isFullscreen: true } })
+  for (let i = 0; i < 30; i++) await clock.settle()
+  const ui = await $.ui.mount({ plugin: 'hud', surface: 'desktop', ...BAND })
+  const shown = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
+  expect(/proj git:\(main\*\)/.test(shown)).toBe(true)
+  expect(/45k\/200k/.test(shown)).toBe(true)
+  expect(/25%/.test(shown)).toBe(true)
+  expect(/Opus 5\.5/.test(shown)).toBe(false)
+  expect(/◐ Read/.test(shown)).toBe(false)
+  // The usage bar stays; the context's bar goes.
+  expect(/[█░]\s*45k/.test(shown)).toBe(false)
+  await ui.unmount()
+})
 
 test('rc label links the bridge session and names attached clients by surface', async () => {
   setLanguage('zh-Hans')
@@ -341,17 +365,22 @@ test('history helpers: sparkline, streak, git counts, summary', async () => {
 
 const DONE = { answer: 'ok', durationMs: 90_000, isAborted: false, turnId: 't1', reason: 'answer' } as const
 
-test('a long turn toasts and chimes, then the summary joins the HUD', { options: { notifyAfterSeconds: 60 } }, async ($, on) => {
+test('a long turn toasts, notifies and chimes, then the summary joins the HUD', { options: { notifyAfterSeconds: 60 } }, async ($, on) => {
   const clock = host(on)
   on('ui.render', ($, e) => {
     const { Box } = $.ui.resolve(e)
     return <Box key="core" />
   })
   const toasts: string[] = []
+  const notified: string[] = []
   let chimes = 0
   on('ui.toast', ($, e) => {
     toasts.push(e.text)
     return { value: undefined }
+  })
+  on('ui.notify', ($, e) => {
+    notified.push(e.text)
+    return { value: { isSent: true, channel: 'iterm2' } }
   })
   on('audio.play', () => {
     chimes++
@@ -369,6 +398,7 @@ test('a long turn toasts and chimes, then the summary joins the HUD', { options:
   await $.turn.complete(DONE)
   for (let i = 0; i < 30; i++) await clock.settle()
   expect(toasts).toEqual(['✓ 本轮完成，用时 1m30s'])
+  expect(notified).toEqual(['✓ 本轮完成，用时 1m30s'])
   expect(chimes).toBe(1)
   // The summary lands, then the debounced refresh draws it.
   await clock.advance(1_000)

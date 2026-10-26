@@ -51,6 +51,8 @@ declare module 'claude-code' {
       isPicking: boolean
       /** The audio theme's tap: whether anything played in the last seconds, and why it could not run. */
       tap: { isAudible: boolean; error: string | null }
+      /** The surfaces where one of the mod's drawing modules failed: the engine's own spinner stands there. */
+      faulted: string[]
     }
     /** hud's side of the pet's place (read only). */
     hud: {

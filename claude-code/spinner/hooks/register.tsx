@@ -49,6 +49,8 @@ const isTurn = atom({ plugin: 'spinner', key: 'isTurn' } as const, false)
 const isPicking = atom({ plugin: 'spinner', key: 'isPicking' } as const, false)
 // The audio theme's tap: whether anything plays, and why it could not run.
 const tapState = atom({ plugin: 'spinner', key: 'tap' } as const, { isAudible: false, error: null as string | null })
+// Surfaces where a Client of ours failed (`ui.fault`): the engine's own line stands there for the session.
+const faulted = atom({ plugin: 'spinner', key: 'faulted' } as const, [] as string[])
 // hud's say: true while it draws the pet beside its rows.
 const hudDock = atom({ plugin: 'hud', key: 'dock' } as const, false)
 
@@ -520,6 +522,12 @@ export const register: Register = (on, options) => {
     if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
     return box
   })
+  // A change no key made (a history recall, a clear, a fill) opens or closes one too.
+  on('prompt.change', async ($, e, next) => {
+    const isOpen = isPickerOpen(e.text, e.cursor)
+    if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
+    return next(e)
+  })
   on('prompt.submit', async ($, e, next) => {
     if (await read($, isPicking)) await update($, isPicking, () => false)
     return next(e)
@@ -540,9 +548,21 @@ export const register: Register = (on, options) => {
     })
   }
 
+  // A scene, mascot or pet that failed to load or draw on a surface: leave the Clients out
+  // there and let the engine draw its own line, rather than an empty or broken region.
+  on('ui.fault', async ($, e, next) => {
+    const surface = e.surface
+    if (!(await read($, faulted)).includes(surface)) {
+      await update($, faulted, list => [...list, surface])
+      $.ui.log(m('fault', { surface, reason: e.reason }))
+    }
+    return next(e)
+  })
+
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
     // One mascot at a time: with the companion's row showing, it stays there.
     if ((await read($, isHidden)) || !(await read($, isCompanionOff))) return next(e)
+    if ((await read($, faulted)).includes(e.surface)) return next(e)
     const ui = $.ui.resolve(e)
     if (!('Client' in ui)) return next(e)
     const { Box, Client } = ui
@@ -564,6 +584,7 @@ export const register: Register = (on, options) => {
   // pet right-aligned beside it unless hud has it beside its rows.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || (await read($, isPicking))) return next(e)
+    if ((await read($, faulted)).includes(e.surface)) return next(e)
     const ui = $.ui.resolve(e)
     if (!('Client' in ui)) return next(e)
     const { Box, Client } = ui

@@ -49,6 +49,8 @@ function host(on: On, reply: () => { status: number; text: string }, stored: Rec
     return { value: { status, ok: status < 300, headers: {}, text } }
   })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('session.surfaces', () => ({ value: [] }))
+  on('session.attach', ($, e) => ({ clientId: e.clientId }))
   on('ui.render', ($, e) => {
     const { Box } = $.ui.resolve(e)
     return <Box key="core" />
@@ -67,6 +69,20 @@ test('band shows the quote on every surface', { options: { categories: 'i' } }, 
     expect(await ui.find({ type: 'Text', text: '—— 苏轼「临江仙·送钱穆父」' })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('a session the desktop app hosts fetches once the desktop attaches', async ($, on) => {
+  const { clock, urls } = host(on, () => ({ status: 200, text: BODY }))
+  await $.session.start({ cwd: '/tmp', surface: 'desktop', isInteractive: false })
+  await clock.settle()
+  expect(urls.length).toBe(0)
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-1' })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop-2' })
+  await clock.settle()
+  expect(urls.length).toBe(1)
+  const ui = await $.ui.mount({ plugin: 'hitokoto', surface: 'desktop', ...BAND })
+  expect(await ui.find({ type: 'Text', text: '『人生如逆旅，我亦是行人。』' })).toBeDefined()
+  await ui.unmount()
 })
 
 test('/hitokoto off hides, failed fetch reports', async ($, on) => {

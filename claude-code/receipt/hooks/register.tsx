@@ -190,6 +190,12 @@ export const register: Register = (on, options) => {
     if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
     return box
   })
+  // A change no key made (a history recall, a clear, a fill) opens or closes one too.
+  on('prompt.change', async ($, e, next) => {
+    const isOpen = isPickerOpen(e.text, e.cursor)
+    if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
+    return next(e)
+  })
   on('prompt.submit', async ($, e, next) => {
     if (await read($, isPicking)) await update($, isPicking, () => false)
     return next(e)

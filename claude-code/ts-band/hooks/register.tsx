@@ -125,6 +125,33 @@ function startPolling($: EngineInterface, config: Config): (isForced?: boolean) 
   }
 }
 
+// Started once per load: at session.start where the session draws, else when the
+// first surface attaches. Answers the read `refreshNow` makes.
+let started: Promise<(isForced?: boolean) => Promise<void>> | null = null
+
+async function start($: EngineInterface, config: Config): Promise<(isForced?: boolean) => Promise<void>> {
+  const settings = (await $.settings.read().catch(() => ({}))) as { language?: unknown }
+  const locale = await Promise.all([
+    $.env.get('LC_ALL').catch(() => undefined),
+    $.env.get('LC_MESSAGES').catch(() => undefined),
+    $.env.get('LANG').catch(() => undefined),
+  ])
+  setLang(resolveLanguage(config.language, settings.language, locale))
+  await $.command.register({ name: 'ts', description: m('cmd.description'), argumentHint: '[off|on]' })
+  const kept = await keptRows(prefsOf($), STORE_MOVES)
+  await update($, hiddenSet, () => !(kept.visible ?? config.isVisible))
+  return startPolling($, config)
+}
+
+/** The start under way or made; one that failed is tried again by the next caller. */
+function startOnce($: EngineInterface, config: Config): Promise<(isForced?: boolean) => Promise<void>> {
+  started ??= start($, config).catch(err => {
+    started = null
+    throw err
+  })
+  return started
+}
+
 // Before 0.6 `/ts off` was kept in the store; it is the `visible` row now.
 const STORE_MOVES = { isHidden: (kept: unknown) => ['visible', kept !== true] as const }
 
@@ -136,21 +163,20 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     // `-p` runs and the SDK draw no band: no tailscale to run for it.
-    if (!e.isInteractive) return next(e)
-    const settings = (await $.settings.read().catch(() => ({}))) as { language?: unknown }
-    const locale = await Promise.all([
-      $.env.get('LC_ALL').catch(() => undefined),
-      $.env.get('LC_MESSAGES').catch(() => undefined),
-      $.env.get('LANG').catch(() => undefined),
-    ])
-    setLang(resolveLanguage(config.language, settings.language, locale))
-    await $.command.register({ name: 'ts', description: m('cmd.description'), argumentHint: '[off|on]' })
-    const kept = await keptRows(prefsOf($), STORE_MOVES)
-    await update($, hiddenSet, () => !(kept.visible ?? config.isVisible))
-    refreshNow = startPolling($, config)
+    if (!e.isInteractive && (await $.session.surfaces()).length === 0) return next(e)
+    refreshNow = await startOnce($, config)
     const result = await next(e)
     await migrateStore(prefsOf($), STORE_MOVES)
     return result
+  })
+
+  // The desktop app hosts its sessions headless and attaches once they are up.
+  on('session.attach', async ($, e, next) => {
+    if (!started) {
+      refreshNow = await startOnce($, config)
+      await migrateStore(prefsOf($), STORE_MOVES)
+    }
+    return next(e)
   })
 
   on('command.run', { command: 'ts' }, async ($, e) => {
@@ -166,6 +192,12 @@ export const register: Register = (on, options) => {
     const isOpen = isPickerOpen(box.text, box.cursor)
     if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
     return box
+  })
+  // A change no key made (a history recall, a clear, a fill) opens or closes one too.
+  on('prompt.change', async ($, e, next) => {
+    const isOpen = isPickerOpen(e.text, e.cursor)
+    if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
+    return next(e)
   })
   on('prompt.submit', async ($, e, next) => {
     if (await read($, isPicking)) await update($, isPicking, () => false)

@@ -15,7 +15,8 @@ const BAND = {
   props: { hasSurvey: false, isWorking: true, maxRows: 10, bodyColumns: 100, scroll: { offset: 0, bodyRows: 9 }, view: {} },
 } as const
 
-const SURFACES = ['terminal', 'desktop'] as const
+// The desktop app draws its own plan card, so the band draws on these and not there.
+const SURFACES = ['terminal', 'vscode'] as const
 
 // The /config rows the plugin wrote, as `[key, value]`.
 let rows: [string, unknown][] = []
@@ -63,7 +64,7 @@ function host(on: On, stored: Record<string, unknown> = {}) {
 const todo = (content: string, status: 'pending' | 'in_progress' | 'completed') => ({ content, status, activeForm: `${content}中` })
 
 /** The band's text as one string, '' when the band does not draw. */
-async function band($: Parameters<TestBody>[0], surface: (typeof SURFACES)[number] = 'terminal'): Promise<string> {
+async function band($: Parameters<TestBody>[0], surface: (typeof SURFACES)[number] | 'desktop' = 'terminal'): Promise<string> {
   const ui = await $.ui.mount({ plugin: 'todo-bar', surface, ...BAND })
   const texts = (await ui.findAll({ type: 'Text' })) as unknown[]
   await ui.unmount()
@@ -104,6 +105,15 @@ test('TodoWrite draws the running task, the bar and the count on every surface',
     expect(text).toContain('━')
     expect(text).toContain('接下来：跑构建 · 发版')
   }
+})
+
+test('the desktop app draws its own plan card: the band steps aside there', async ($, on) => {
+  const { clock } = host(on)
+  await $.session.start(START)
+  await clock.settle()
+  await $.tool.call({ tool: 'TodoWrite', todos: [todo('写测试', 'in_progress'), todo('跑构建', 'pending')] } as never)
+  expect(await band($, 'terminal')).toContain('写测试中')
+  expect(await band($, 'desktop')).not.toContain('写测试中')
 })
 
 test('TaskCreate and TaskUpdate draw the task list', async ($, on) => {
@@ -214,6 +224,8 @@ test('the running task shows its time, yellow once slow; /todos counts its tool 
 
 test('subagents at work show under the running task, each with its tool and time', async ($, on) => {
   const { clock } = host(on)
+  const viewed: unknown[] = []
+  on('ui.view', ($, e) => (viewed.push(e), { value: {} }))
   await $.session.start(START)
   await clock.settle()
   await $.tool.call({ tool: 'TodoWrite', todos: [todo('A', 'in_progress'), todo('B', 'pending')] } as never)
@@ -228,6 +240,11 @@ test('subagents at work show under the running task, each with its tool and time
   // Two rows, then the rest counted on one.
   expect(shown).toContain('还有 2 个子代理')
   expect(shown).not.toContain('查测试')
+  // A press on a subagent's type shows its transcript.
+  const ui = await $.ui.mount({ plugin: 'todo-bar', surface: 'terminal', ...BAND })
+  await ui.press({ key: 'view-ag-查鉴权' })
+  await ui.unmount()
+  expect(viewed).toEqual([{ agentId: 'ag-查鉴权' }])
   // An agent's own turn ends its row; the main turn's end drops those the engine no longer runs.
   await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 'x', reason: 'answer', agentId: 'ag-查鉴权' } as never)
   expect(await band($)).not.toContain('查鉴权')

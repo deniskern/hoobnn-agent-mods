@@ -71,7 +71,7 @@ claude plugin install hud@hoobnn-agent-mods
 | --- | --- | --- |
 | `visible` | 显示 HUD | 开 |
 | `footerButton` | 在输入框底栏显示 「HUD」开关按钮 | 开 |
-| `position` | `above` 放在输入框上方，`below` 放在下方原状态栏的位置 | `above` |
+| `position` | `above` 放在输入框上方，`below` 放在下方原状态栏的位置（Claude Desktop 没有这个位置，那里总在输入框上方） | `above` |
 | `theme` | 主题 | `classic` |
 | `showMascot` | 动漫风主题显示颜文字看板娘 | 开 |
 | `contextAlerts` | 上下文到这些百分比时提醒，逗号分隔，如 `80,90`；留空关闭 | 空 |
@@ -83,7 +83,7 @@ claude plugin install hud@hoobnn-agent-mods
 | `dailyBudgetUsd` | 每日预算（美元），显示今天的花费对比；0 关闭 | 0 |
 | `showHistory` | 显示近 7 天花费折线和连续使用天数 | 关 |
 | `summaryEveryTurns` | 第一轮后和每隔几轮生成一行任务摘要（复用提示词缓存）；0 关闭 | 5 |
-| `notifyAfterSeconds` | 一轮跑了这么多秒以上才在结束时提醒；0 关闭 | 0 |
+| `notifyAfterSeconds` | 一轮跑了这么多秒以上才在结束时提醒（toast 加系统通知）；0 关闭 | 0 |
 | `notifySound` | 结束提醒带提示音（macOS） | 开 |
 | `gitDirtyWarn` | 未提交的改动达到这么多个路径时提醒；0 关闭 | 20 |
 | `gitAheadWarn` | 未推送的提交达到这么多个时提醒；0 关闭 | 5 |
@@ -124,7 +124,8 @@ Claude Code 的状态栏 stdin 里有这些字段，mod API 没有，所以由 m
   - 近 7 天花费的迷你折线和连续使用天数（`showHistory`）；无论是否显示，花费都会在 mod 的存储里保留 60 天。
   - `⚠` 未提交的路径数达到 `gitDirtyWarn`、未推送的提交数达到 `gitAheadWarn` 时提醒。
 - 预警：上下文用量到达 `contextAlerts` 里的每个百分比、5 小时、7 天或按模型计的周额度到达 `usageAlerts` 里的每个百分比时弹 toast；每个阈值只提醒一次，读数回落到阈值以下 5 个百分点（如 `/compact` 或额度重置）后才会再次提醒。
-- 结束提醒：主线程的一轮跑了 `notifyAfterSeconds` 秒或更久时，结束时弹 toast，开启 `notifySound` 时再响一声（macOS）。
+- 结束提醒：主线程的一轮跑了 `notifyAfterSeconds` 秒或更久时，结束时弹 toast，同时通过你在 Claude Code 里设置的通知渠道发一条系统通知，开启 `notifySound` 时再响一声（macOS）。
+- Claude Desktop：桌面版的底栏已经显示模型和推理强度，侧栏显示上下文，对话里显示工具调用和计划，所以在桌面版托管的会话里，HUD 不再显示这几项和上下文进度条，只保留项目与 git、上下文数值、额度、缓存和附加行。
 - `/hud detail` 面板：本会话每个工具的调用次数、总耗时、平均耗时和失败数；最近 8 轮的用时、花费和上下文增长；子代理；待办；今天和本周的花费。
 - 及时重画：压缩完成后立即重画；`/model` 之后也会重画（在新模型第一次请求之前就显示它）。
 - 相对 claude-hud 的显示调整：` │ ` 和 ` | ` 分隔符调暗；正在跑的工具涉及的文件显示为相对会话目录的路径（`◐ Read src/a.ts`）；会话时长显示为 `⏱ 12m`，提示缓存显示为 `缓存 至 14:05`，不用占两列宽的 `⏱️`。

@@ -71,7 +71,7 @@ Set them in `/config`, or under `pluginConfigs` in `~/.claude/settings.json`:
 | --- | --- | --- |
 | `visible` | Show the HUD | on |
 | `footerButton` | Show the HUD toggle button in the prompt footer | on |
-| `position` | `above` the prompt as a band, or `below` it where the statusline sat | `above` |
+| `position` | `above` the prompt as a band, or `below` it where the statusline sat (Claude Desktop has no such place: there it is always above) | `above` |
 | `theme` | The theme | `classic` |
 | `showMascot` | Show the kaomoji mascot in the anime themes | on |
 | `contextAlerts` | Toast when context use reaches these percentages, comma separated (`80,90`); empty turns it off | empty |
@@ -83,7 +83,7 @@ Set them in `/config`, or under `pluginConfigs` in `~/.claude/settings.json`:
 | `dailyBudgetUsd` | Daily budget in US dollars, with today's spend against it; 0 off | 0 |
 | `showHistory` | Show the last 7 days' spend as a sparkline and the streak of days in use | off |
 | `summaryEveryTurns` | Write the one-line task summary after the first turn and every this many turns (served from the prompt cache); 0 off | 5 |
-| `notifyAfterSeconds` | Toast when a turn that ran at least this many seconds ends; 0 off | 0 |
+| `notifyAfterSeconds` | Toast and notify when a turn that ran at least this many seconds ends; 0 off | 0 |
 | `notifySound` | A chime with that toast (macOS) | on |
 | `gitDirtyWarn` | Warn at this many uncommitted paths; 0 off | 20 |
 | `gitAheadWarn` | Warn at this many unpushed commits; 0 off | 5 |
@@ -124,7 +124,8 @@ Claude Code's statusline stdin carries these; the mod API does not, so the mod w
   - The last 7 days' spend as a sparkline and the streak of days in use (`showHistory`); the spend is kept in the mod's store for 60 days either way.
   - `⚠` uncommitted paths at or past `gitDirtyWarn` and unpushed commits at or past `gitAheadWarn`.
 - Alerts: a toast when context use reaches each of `contextAlerts`, and the 5-hour, 7-day or a model-scoped weekly limit each of `usageAlerts`; once per threshold, again only after the gauge drops 5 points below it (a `/compact`, a reset).
-- Turn done: a turn of the main thread that ran `notifyAfterSeconds` or longer ends with a toast and, with `notifySound`, a short chime (macOS).
+- Turn done: a turn of the main thread that ran `notifyAfterSeconds` or longer ends with a toast, a notification by the channel you set in Claude Code and, with `notifySound`, a short chime (macOS).
+- Claude Desktop: its footer names the model and effort, its side panel shows the context, and its transcript the tool calls and the plan, so in a session Desktop hosts the HUD leaves those out, and the context bar, keeping the project and git, the context figure, the limits, the cache and the extras row.
 - `/hud detail` pane: each tool's calls, total and average time and failures this session; the last 8 turns with their time, cost and context growth; subagents; todos; today's and the week's spend.
 - Prompt redraws: right after a compaction, and after `/model` (showing the new model before its first step).
 - Display tweaks over claude-hud: the ` │ ` and ` | ` separators are dimmed; a running tool's file shows relative to the session directory (`◐ Read src/a.ts`); the session duration is `⏱ 12m` and the prompt cache `缓存 至 14:05`, without the emoji-width `⏱️`.

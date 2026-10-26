@@ -21,11 +21,12 @@ Once Claude writes a task list, a progress bar appears above the prompt: the tas
 
 - Progress at a glance: the running task, a bar, the count and the percentage, with the next one or two tasks in a dim second row.
 - Task timer: once a task has run a minute its time shows after it (`3m 12s`), and turns yellow past `slowMinutes` (default 10), so a step that drags stands out.
-- What the subagents are doing: when Claude starts subagents, each gets a row under the running task: its type, its task, the tool it is on, and its time once it has run a minute. A row leaves when its subagent ends; past 3 rows the rest share one (`+2 more subagents`). `showAgents` turns them off.
+- What the subagents are doing: when Claude starts subagents, each gets a row under the running task: its type, its task, the tool it is on, and its time once it has run a minute. A row leaves when its subagent ends; past 3 rows the rest share one (`+2 more subagents`). Click a subagent's type to open its transcript. `showAgents` turns them off.
 - Done state: when every task is done the bar turns green with the time the whole list took, then folds away after 8 seconds; the next list brings it back.
 - No tokens, no side effects: it reads `TodoWrite`, `TaskCreate` and `TaskUpdate` after they have run. It registers no tool, adds nothing to the system prompt and never refuses or holds a call. A refused or failed call changes nothing, and a subagent's own list is left out.
 - Survives a resume: each session's list is kept in the plugin's store, so a resumed session finds its bar where it left it.
 - The bar steps aside while a `/` or `@` picker is open.
+- Claude Desktop draws its own plan card and background tasks, so the bar does not draw there.
 
 ![todo-bar: every task done](assets/done.png)
 

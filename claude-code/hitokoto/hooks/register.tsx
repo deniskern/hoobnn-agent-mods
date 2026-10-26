@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Quote } from '../types'
 import { readConfig } from './config'
+import type { Config } from './config'
 import { m, setLang } from './i18n'
 import { isPickerOpen, stackAbove } from './kit/band'
 import { resolveLanguage } from './kit/lang'
@@ -111,6 +112,41 @@ async function show($: EngineInterface, isShown: boolean): Promise<void> {
 // Before 0.4 `/hitokoto off` was kept in the store; it is the `visible` row now.
 const STORE_MOVES = { isHidden: (kept: unknown) => ['visible', kept !== true] as const }
 
+// Started once per load: at session.start where the session draws, else when the
+// first surface attaches.
+let isStarted = false
+
+async function start($: EngineInterface, config: Config): Promise<void> {
+  if (isStarted) return
+  isStarted = true
+  const settings = (await $.settings.read().catch(() => ({}))) as { language?: unknown }
+  const locale = await Promise.all([
+    $.env.get('LC_ALL').catch(() => undefined),
+    $.env.get('LC_MESSAGES').catch(() => undefined),
+    $.env.get('LANG').catch(() => undefined),
+  ])
+  setLang(resolveLanguage(config.language, settings.language, locale))
+  await $.command.register({
+    name: 'hitokoto',
+    description: m('cmd.description'),
+    argumentHint: '[off|on]',
+  })
+  const kept = await keptRows(prefsOf($), STORE_MOVES)
+  await update($, hiddenSet, () => !(kept.visible ?? config.isVisible))
+
+  // Not awaited: session.start holds the first prompt until it settles.
+  if (config.mode === 'daily') {
+    void showDaily($, config.url)
+    $.clock.every(DAY_CHECK_MS, () => void whenShown($, () => showDaily($, config.url)))
+  } else {
+    await showLast($)
+    void fetchNew($, config.url, false)
+    if (config.mode === 'interval') {
+      $.clock.every(config.intervalMs, () => void whenShown($, () => fetchNew($, config.url, false)))
+    }
+  }
+}
+
 export const register: Register = (on, options) => {
   const config = readConfig(options)
   isRowHidden = !config.isVisible
@@ -119,37 +155,20 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     // `-p` runs and the SDK draw no band: nothing to fetch for.
-    if (!e.isInteractive) return next(e)
-    const settings = (await $.settings.read().catch(() => ({}))) as { language?: unknown }
-    const locale = await Promise.all([
-      $.env.get('LC_ALL').catch(() => undefined),
-      $.env.get('LC_MESSAGES').catch(() => undefined),
-      $.env.get('LANG').catch(() => undefined),
-    ])
-    setLang(resolveLanguage(config.language, settings.language, locale))
-    await $.command.register({
-      name: 'hitokoto',
-      description: m('cmd.description'),
-      argumentHint: '[off|on]',
-    })
-    const kept = await keptRows(prefsOf($), STORE_MOVES)
-    await update($, hiddenSet, () => !(kept.visible ?? config.isVisible))
-
-    // Not awaited: session.start holds the first prompt until it settles.
-    if (isDaily) {
-      void showDaily($, url)
-      $.clock.every(DAY_CHECK_MS, () => void whenShown($, () => showDaily($, url)))
-    } else {
-      await showLast($)
-      void fetchNew($, url, false)
-      if (mode === 'interval') {
-        $.clock.every(config.intervalMs, () => void whenShown($, () => fetchNew($, url, false)))
-      }
-    }
-
+    if (!e.isInteractive && (await $.session.surfaces()).length === 0) return next(e)
+    await start($, config)
     const result = await next(e)
     await migrateStore(prefsOf($), STORE_MOVES)
     return result
+  })
+
+  // The desktop app hosts its sessions headless and attaches once they are up.
+  on('session.attach', async ($, e, next) => {
+    if (!isStarted) {
+      await start($, config)
+      await migrateStore(prefsOf($), STORE_MOVES)
+    }
+    return next(e)
   })
 
   on('prompt.submit', async ($, e, next) => {
@@ -182,6 +201,12 @@ export const register: Register = (on, options) => {
     const isOpen = isPickerOpen(box.text, box.cursor)
     if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
     return box
+  })
+  // A change no key made (a history recall, a clear, a fill) opens or closes one too.
+  on('prompt.change', async ($, e, next) => {
+    const isOpen = isPickerOpen(e.text, e.cursor)
+    if ((await read($, isPicking)) !== isOpen) await update($, isPicking, () => isOpen)
+    return next(e)
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

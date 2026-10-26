@@ -33,7 +33,7 @@
     "position": {
       "type": "string",
       "title": "Position",
-      "description": "Where the HUD draws: above the prompt (a band) or below it (beside the hint line, where the statusline sat)",
+      "description": "Where the HUD draws: above the prompt (a band) or below it (beside the hint line, where the statusline sat); Claude Desktop has no hint line, so there it draws above",
       "options": [
         "above",
         "below"
@@ -81,7 +81,7 @@
     "notifyAfterSeconds": {
       "type": "number",
       "title": "Notify after (s)",
-      "description": "Toast (and chime) when a turn that ran at least this long ends; 0 (the default) turns it off",
+      "description": "Toast, notify by your notification channel (and chime) when a turn that ran at least this long ends; 0 (the default) turns it off",
       "default": 0
     },
     "notifySound": {
