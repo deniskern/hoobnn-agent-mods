@@ -2,23 +2,7 @@ import type { On, SessionMeasureInput } from 'claude-code'
 import { type Engine, expect, mock, test } from 'claude-code/testing'
 
 import { parseAnsi } from '../hooks/ansi'
-import {
-  addDays,
-  addSample,
-  appendExtras,
-  chimeWav,
-  crossThresholds,
-  dimSeparators,
-  exhaustAt,
-  extrasLine,
-  growthOf,
-  lastDays,
-  paceAt,
-  parseGitStatus,
-  parseThresholds,
-  sparkline,
-  streak,
-} from '../hooks/extras'
+import { addDays, addSample, appendExtras, chimeWav, crossThresholds, dimSeparators, exhaustAt, extrasLine, growthOf, lastDays, paceAt, packRows, parseGitStatus, parseThresholds, sparkline, streak } from '../hooks/extras'
 import { setLanguage } from '../hooks/hud/i18n/index'
 import { MESSAGES, m, money } from '../hooks/i18n'
 import { rcSpans } from '../hooks/remote'
@@ -338,6 +322,18 @@ test('extras fit the width: low parts drop, the row joins the last line when it 
     { text: ' │ ', dimColor: true },
     { text: 'proj', color: 'cyan' },
   ])
+})
+
+test('short rows pack side by side where they fit; the first row stays alone', async () => {
+  const row = (text: string) => [{ text }]
+  const rows = [row('[Opus 5.5] │ proj │ ⏱ 51m'), row('上下文 ███░░░░░░░ 340k/1.0M'), row('5h: 5% (4h 4m) | 7d: 13% (4d 11h) | Fable: 3% (4d 11h)'), row('缓存 至 13:56')]
+  const packed = packRows(rows, 100).map(r => r.map(s => s.text).join(''))
+  expect(packed).toEqual([
+    '[Opus 5.5] │ proj │ ⏱ 51m',
+    '上下文 ███░░░░░░░ 340k/1.0M │ 5h: 5% (4h 4m) | 7d: 13% (4d 11h) | Fable: 3% (4d 11h)',
+    '缓存 至 13:56',
+  ])
+  expect(packRows(rows, undefined)).toBe(rows)
 })
 
 test('history helpers: sparkline, streak, git counts, summary', async () => {

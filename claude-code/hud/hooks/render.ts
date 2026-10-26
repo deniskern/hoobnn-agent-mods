@@ -6,7 +6,7 @@ import './shims/globals.js'
 
 import type { HudLine } from '../types'
 import { parseAnsi } from './ansi.js'
-import { dimSeparators, parseGitStatus } from './extras.js'
+import { dimSeparators, packRows, parseGitStatus } from './extras.js'
 import { getCostTotals } from './hud/daily-cost.js'
 import { takeGitStatus } from './hud/git.js'
 import { main } from './hud/index.js'
@@ -50,7 +50,7 @@ export async function renderHud(io: Io, session: SessionApi): Promise<Rendered> 
     const resetsAt = stdin.rate_limits?.seven_day?.resets_at
     todayUsd = getCostTotals(stdin, { sevenDayResetAt: resetsAt ? new Date(resetsAt * 1000) : null })?.todayUsd ?? null
   })
-  const rendered = out.map(line => dimSeparators(parseAnsi(line)))
+  const rendered = packRows(out.map(line => dimSeparators(parseAnsi(line))), columns)
   live.bridgeSessionId = await remoteControl(io, stdin.session_id ?? '')
   const rc = rcSpans(live.bridgeSessionId, await session.remotes())
   if (rc.length > 0) {

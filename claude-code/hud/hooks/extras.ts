@@ -295,6 +295,25 @@ export function dimSeparators(row: HudLine): HudLine {
   })
 }
 
+/**
+ * claude-hud's short rows packed side by side where they fit in `columns`: it merges
+ * only its merge groups, and those with the usage bars, so a terminal of 100 columns
+ * got the context, the limits and the cache a row each. The first row stays alone.
+ */
+export function packRows(rows: HudLine[], columns: number | undefined): HudLine[] {
+  if (!columns) return rows
+  const packed: HudLine[] = []
+  for (const [i, row] of rows.entries()) {
+    const last = packed[packed.length - 1]
+    if (i > 1 && last && lineWidth(last) + textWidth(SEPARATOR) + lineWidth(row) <= columns) {
+      packed[packed.length - 1] = [...last, { text: SEPARATOR, dimColor: true }, ...row]
+    } else {
+      packed.push(row)
+    }
+  }
+  return packed
+}
+
 /** The extras row joins claude-hud's last row when both fit in `columns`, else goes under it. */
 export function appendExtras(rows: HudLine[], extra: HudLine, columns: number | undefined): HudLine[] {
   if (extra.length === 0) return rows
