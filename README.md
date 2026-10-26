@@ -10,7 +10,7 @@ Claude Code mod 合集：状态栏 HUD、任务进度条、运行动画等。
 
 </div>
 
-为 Claude Code 终端提供的六个 mod：状态栏 HUD、任务进度条、回合回执、运行动画和宠物、Tailscale 节点状态、一言。每个 mod 都可单独安装、开箱即用，设置统一在 `/config` 中管理。其他编程 Agent 工具的扩展按工具分目录存放，目前 `pi/` 和 `deepseek/` 只有说明文件，还没有收录扩展。
+为 Claude Code 提供的六个 mod，终端和 Claude Desktop 都能用：状态栏 HUD、任务进度条、回合回执、运行动画和宠物、Tailscale 节点状态、一言。每个 mod 都可单独安装、开箱即用，设置统一在 `/config` 中管理。其他编程 Agent 工具的扩展按工具分目录存放，目前 `pi/` 和 `deepseek/` 只有说明文件，还没有收录扩展。
 
 | 目录 | 对应工具 | 放什么 |
 | --- | --- | --- |

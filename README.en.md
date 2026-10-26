@@ -10,7 +10,7 @@ Claude Code mods: a statusline HUD, a task progress bar, spinner animations and 
 
 </div>
 
-Six mods for the Claude Code terminal: a statusline HUD, a task progress bar, a turn receipt, spinner animations with a pet, a Tailscale node band and a Hitokoto quote band. Each installs on its own, works out of the box and keeps its settings in `/config`. Extensions for other coding-agent harnesses go in one folder per harness; for now `pi/` and `deepseek/` hold only a README and no extensions yet.
+Six mods for Claude Code, in the terminal and in Claude Desktop: a statusline HUD, a task progress bar, a turn receipt, spinner animations with a pet, a Tailscale node band and a Hitokoto quote band. Each installs on its own, works out of the box and keeps its settings in `/config`. Extensions for other coding-agent harnesses go in one folder per harness; for now `pi/` and `deepseek/` hold only a README and no extensions yet.
 
 | Folder | Harness | What goes there |
 | --- | --- | --- |
