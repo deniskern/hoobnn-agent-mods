@@ -52,37 +52,68 @@ export function drawRows(ui: Ui, rows: HudLine[], rest: RenderElement, indent = 
   )
 }
 
+// A bar's track and fill by tone, light then dark: the surface draws an Svg as an
+// image, which follows the system's scheme but not the theme's keys.
+const BAR = {
+  track: ['#1f1f1f1f', '#ffffff24'],
+  fill: { none: ['#8a8a8e', '#a1a1a6'], warn: ['#c27c0e', '#f0a83b'], bad: ['#d63b3b', '#f26464'] },
+} as const
+const BAR_WIDTH = 120
+
+/** A gauge's bar, rounded like the app's own meters, filled to `percent`. */
+export function barSvg(percent: number, tone: DeskItem['tone']): string {
+  const [fillLight, fillDark] = BAR.fill[tone ?? 'none']
+  const fill = Math.min(BAR_WIDTH, Math.max(0, percent) / 100 * BAR_WIDTH)
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${BAR_WIDTH}" height="4" viewBox="0 0 ${BAR_WIDTH} 4">` +
+    `<style>.t{fill:${BAR.track[0]}}.f{fill:${fillLight}}` +
+    `@media (prefers-color-scheme:dark){.t{fill:${BAR.track[1]}}.f{fill:${fillDark}}}</style>` +
+    `<rect class="t" width="${BAR_WIDTH}" height="4" rx="2"/>` +
+    (fill > 0 ? `<rect class="f" width="${Math.max(4, fill).toFixed(1)}" height="4" rx="2"/>` : '') +
+    '</svg>'
+  )
+}
+
 /**
- * The HUD on a surface with a type of its own (the desktop app, a phone, an editor):
- * small readings that wrap, a dim label before each value, the theme's warning colors.
+ * The HUD on a surface with a type of its own (the desktop app, a phone, an editor),
+ * laid out as the app's own controls are rather than as terminal rows: a tile per
+ * gauge, its label and value over a bar and when it resets, then the notes as a
+ * line of muted words, a warning in the theme's warning color.
  */
-export function drawDesk(ui: Pick<Elements['terminal'], 'Box' | 'Text'>, desk: Desk, rest: RenderElement): RenderElement {
-  const { Box, Text } = ui
-  const item = (it: DeskItem, key: string) => (
-    <Box key={key} flexDirection="row" columnGap={1}>
-      {it.label ? <Text size="footnote" dimColor>{it.label}</Text> : null}
-      <Text
-        size="footnote"
-        tabular
-        weight={it.tone === undefined || it.isMuted ? 'regular' : 'medium'}
-        color={it.tone === 'bad' ? 'error' : it.tone === 'warn' ? 'warning' : undefined}
-        dimColor={it.isMuted === true && it.tone === undefined}
-      >
-        {it.value}
-      </Text>
-      {it.hint ? <Text size="footnote" dimColor>{it.hint}</Text> : null}
+export function drawDesk(ui: Pick<Elements['desktop'], 'Box' | 'Text'> & Partial<Pick<Elements['desktop'], 'Svg'>>, desk: Desk, rest: RenderElement): RenderElement {
+  const { Box, Text, Svg } = ui
+  const color = (it: DeskItem) => (it.tone === 'bad' ? 'error' : it.tone === 'warn' ? 'warning' : undefined)
+  const tile = (it: DeskItem, key: string) => (
+    <Box key={key} flexDirection="column" rowGap="xs">
+      <Box flexDirection="row" justifyContent="space-between" columnGap="md">
+        <Text size="caption" dimColor>{it.label ?? ''}</Text>
+        <Text size="footnote" weight="semibold" tabular color={color(it)}>
+          {it.value}
+        </Text>
+      </Box>
+      {it.percent !== undefined && Svg ? (
+        <Svg source={barSvg(it.percent, it.tone)} alt={`${it.label ?? ''} ${it.value}`} width={BAR_WIDTH} height={4} />
+      ) : null}
+      {it.hint ? <Text size="caption" dimColor tabular>{it.hint}</Text> : null}
     </Box>
   )
-  const row = (items: DeskItem[], name: string) =>
-    items.length === 0 ? null : (
-      <Box key={name} flexDirection="row" flexWrap="wrap" columnGap="lg">
-        {items.map((it, i) => item(it, `${name}${i}`))}
-      </Box>
-    )
+  const note = (it: DeskItem, key: string) => (
+    <Text key={key} size="caption" weight={it.tone ? 'medium' : 'regular'} color={color(it)} dimColor={it.tone === undefined}>
+      {it.value}
+    </Text>
+  )
   return (
-    <Box flexDirection="column">
-      {row(desk.gauges, 'g')}
-      {row(desk.notes, 'n')}
+    <Box flexDirection="column" rowGap="sm">
+      {desk.gauges.length > 0 ? (
+        <Box flexDirection="row" flexWrap="wrap" columnGap="xl" rowGap="sm" alignItems="flex-start">
+          {desk.gauges.map((it, i) => tile(it, `g${i}`))}
+        </Box>
+      ) : null}
+      {desk.notes.length > 0 ? (
+        <Box flexDirection="row" flexWrap="wrap" columnGap="lg">
+          {desk.notes.map((it, i) => note(it, `n${i}`))}
+        </Box>
+      ) : null}
       {rest}
     </Box>
   )

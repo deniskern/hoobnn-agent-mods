@@ -224,7 +224,13 @@ test('a remote surface draws the readings as words; the desktop leaves the conte
   shown = await texts('desktop')
   expect(shown).not.toContain('45k/200k')
   expect(shown).toContain('25%')
-  expect(shown.some(t => /Opus|◐ Read|[█░│]/.test(t))).toBe(false)
+  expect(shown.some(t => /Opus|◐ Read|[█░│⏱✎⚠]/.test(t))).toBe(false)
+  // A tile per limit: its label, its value, and a bar the app draws.
+  const ui = await $.ui.mount({ plugin: 'hud', surface: 'desktop', ...BAND })
+  const bars = await ui.findAll({ type: 'Svg' })
+  expect(bars.length).toBeGreaterThan(0)
+  expect(bars[0]!.props.source).toMatch(/^<svg [^>]*width="120"/)
+  await ui.unmount()
 })
 
 test('rc label links the bridge session and names attached clients by surface', async () => {

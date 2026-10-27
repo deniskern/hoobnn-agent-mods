@@ -312,11 +312,11 @@ export const register: Register = (on, options) => {
             ...extrasInput,
             context: !isDesktop && used.size > 0 && used.tokens > 0 ? used : null,
             limits: [
-              ...(typeof five?.used_percentage === 'number' ? [{ label: '5h', percent: five.used_percentage, resetsAt: five.resets_at ? five.resets_at * 1000 : null }] : []),
+              ...(typeof five?.used_percentage === 'number' ? [{ label: m('limit.fiveHour'), percent: five.used_percentage, resetsAt: five.resets_at ? five.resets_at * 1000 : null }] : []),
               ...(typeof limits?.seven_day?.used_percentage === 'number'
-                ? [{ label: '7d', percent: limits.seven_day.used_percentage, resetsAt: limits.seven_day.resets_at ? limits.seven_day.resets_at * 1000 : null }]
+                ? [{ label: m('limit.sevenDay'), percent: limits.seven_day.used_percentage, resetsAt: limits.seven_day.resets_at ? limits.seven_day.resets_at * 1000 : null }]
                 : []),
-              ...scoped.map(w => ({ label: w.name, percent: w.percent, resetsAt: w.resetsAt === null ? null : w.resetsAt * 1000 })),
+              ...scoped.map(w => ({ label: m('limit.scoped', { name: w.name }), percent: w.percent, resetsAt: w.resetsAt === null ? null : w.resetsAt * 1000 })),
             ],
             cache: cache?.warm && typeof cache.expires_at === 'number' ? { until: cache.expires_at * 1000, warnMs: Math.max(60, ttlSeconds / 5) * 1000 } : null,
             durationMs: stdin.cost?.total_duration_ms ?? null,
@@ -662,7 +662,8 @@ export const register: Register = (on, options) => {
     if (e.surface !== 'terminal') {
       const shown = await read($, desk)
       if (shown.gauges.length === 0 && shown.notes.length === 0) return next(e)
-      return drawDesk($.ui.resolve(e), shown, await next(e))
+      const ui = $.ui.resolve(e)
+      return drawDesk({ ...ui, Svg: 'Svg' in ui ? ui.Svg : undefined }, shown, await next(e))
     }
     const rows = await read($, lines)
     if (rows.length === 0) return next(e)

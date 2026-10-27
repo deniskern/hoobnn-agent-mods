@@ -52,6 +52,7 @@ type Key =
   | 'summary.language'
   | 'desk.context'
   | 'desk.cache'
+  | 'desk.session'
   | 'desk.resets'
 
 // French (and German, Spanish, Russian) set a percent sign off with a space; French
@@ -105,7 +106,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': '7 days {spent}',
     'summary.language': 'English',
     'desk.context': 'context',
-    'desk.cache': 'cache until {time}',
+    'desk.cache': 'cache expires',
+    'desk.session': 'session',
     'desk.resets': 'resets in {d}',
   },
   'zh-Hans': {
@@ -154,7 +156,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': '7 天 {spent}',
     'summary.language': 'Simplified Chinese',
     'desk.context': '上下文',
-    'desk.cache': '缓存至 {time}',
+    'desk.cache': '缓存到期',
+    'desk.session': '会话',
     'desk.resets': '{d} 后重置',
   },
   'zh-Hant': {
@@ -203,7 +206,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': '7 天 {spent}',
     'summary.language': 'Traditional Chinese as used in Taiwan',
     'desk.context': '上下文',
-    'desk.cache': '快取至 {time}',
+    'desk.cache': '快取到期',
+    'desk.session': '工作階段',
     'desk.resets': '{d} 後重置',
   },
   ja: {
@@ -252,7 +256,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': '7日間 {spent}',
     'summary.language': 'Japanese',
     'desk.context': 'コンテキスト',
-    'desk.cache': 'キャッシュ {time} まで',
+    'desk.cache': 'キャッシュ期限',
+    'desk.session': 'セッション',
     'desk.resets': '{d} 後にリセット',
   },
   ko: {
@@ -301,7 +306,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': '7일 {spent}',
     'summary.language': 'Korean',
     'desk.context': '컨텍스트',
-    'desk.cache': '캐시 {time}까지',
+    'desk.cache': '캐시 만료',
+    'desk.session': '세션',
     'desk.resets': '{d} 후 초기화',
   },
   es: {
@@ -350,7 +356,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': '7 días: {spent}',
     'summary.language': 'Spanish',
     'desk.context': 'contexto',
-    'desk.cache': 'caché hasta las {time}',
+    'desk.cache': 'la caché expira',
+    'desk.session': 'sesión',
     'desk.resets': 'se reinicia en {d}',
   },
   fr: {
@@ -399,7 +406,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': `7 jours${NB}: {spent}`,
     'summary.language': 'French',
     'desk.context': 'contexte',
-    'desk.cache': 'cache jusqu’à {time}',
+    'desk.cache': 'fin du cache',
+    'desk.session': 'session',
     'desk.resets': 'réinitialisé dans {d}',
   },
   de: {
@@ -448,7 +456,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': '7 Tage: {spent}',
     'summary.language': 'German',
     'desk.context': 'Kontext',
-    'desk.cache': 'Cache bis {time}',
+    'desk.cache': 'Cache läuft ab',
+    'desk.session': 'Sitzung',
     'desk.resets': 'zurückgesetzt in {d}',
   },
   'pt-BR': {
@@ -497,7 +506,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': '7 dias: {spent}',
     'summary.language': 'Brazilian Portuguese',
     'desk.context': 'contexto',
-    'desk.cache': 'cache até {time}',
+    'desk.cache': 'cache expira',
+    'desk.session': 'sessão',
     'desk.resets': 'reinicia em {d}',
   },
   ru: {
@@ -556,7 +566,8 @@ export const MESSAGES: Record<CanonicalLanguage, Record<Key, Text>> = {
     'spend.week': '7 дн.: {spent}',
     'summary.language': 'Russian',
     'desk.context': 'контекст',
-    'desk.cache': 'кэш до {time}',
+    'desk.cache': 'кэш истекает',
+    'desk.session': 'сессия',
     'desk.resets': 'сброс через {d}',
   },
 }

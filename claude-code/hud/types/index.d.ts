@@ -15,7 +15,8 @@ export type Span = {
 export type HudLine = Span[]
 
 /** One reading on a remote surface's HUD: a dim label, the value, a dim note after it. */
-export type DeskItem = { label?: string; value: string; hint?: string; tone?: 'warn' | 'bad'; isMuted?: boolean }
+/** A reading drawn in a surface's own type: a label over its value, `percent` as a bar under it. */
+export type DeskItem = { label?: string; value: string; hint?: string; percent?: number; tone?: 'warn' | 'bad'; isMuted?: boolean }
 
 /** The HUD a remote surface draws in its own type: the gauges, then what the extras row says. */
 export type Desk = { gauges: DeskItem[]; notes: DeskItem[] }
