@@ -14,12 +14,17 @@ export type Span = {
 
 export type HudLine = Span[]
 
-/** One reading on a remote surface's HUD: a dim label, the value, a dim note after it. */
-/** A reading drawn in a surface's own type: a label over its value, `percent` as a bar under it. */
+/** A reading drawn in a surface's own type: a label beside its value, `percent` as a bar under them. */
 export type DeskItem = { label?: string; value: string; hint?: string; percent?: number; tone?: 'warn' | 'bad'; isMuted?: boolean }
 
 /** The HUD a remote surface draws in its own type: the gauges, then what the extras row says. */
 export type Desk = { gauges: DeskItem[]; notes: DeskItem[] }
+
+/** Where the HUD draws: the terminal, or an app with a type of its own (Claude Desktop, a phone, VS Code). */
+export type Side = 'terminal' | 'app'
+
+/** Hidden per side by `/hud off` or the footer button this session; null follows the side's `/config` row. */
+export type Hidden = Record<Side, boolean | null>
 
 /** What the statusline's stdin carried and only the turn's requests reveal. */
 export type StepInfo = {
@@ -82,7 +87,7 @@ declare module 'claude-code' {
     hud: {
       lines: HudLine[]
       desk: Desk
-      isHidden: boolean | null
+      hidden: Hidden
       step: StepInfo
       /** Remote clients attached (a phone, the web), not the terminal. */
       remotes: Remote[]

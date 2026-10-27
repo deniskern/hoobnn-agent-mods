@@ -377,14 +377,32 @@ export function chimeWav(): string {
   return chime
 }
 
+/** What the apps' HUD can show (`appItems`): the readings, then the summary and the warnings. */
+export const APP_ITEMS = ['context', '5h', '7d', 'model', 'cache', 'session', 'cost', 'summary', 'alerts'] as const
+export type AppItem = (typeof APP_ITEMS)[number]
+const DEFAULT_APP_ITEMS: AppItem[] = ['context', '5h', '7d', 'model', 'cache', 'session', 'summary', 'alerts']
+
+/** `appItems`' names, comma or space separated, in their order; unknown names drop, none at all is the default. */
+export function parseAppItems(value: string): AppItem[] {
+  const picked = value
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .filter((name): name is AppItem => (APP_ITEMS as readonly string[]).includes(name))
+  return picked.length > 0 ? [...new Set(picked)] : DEFAULT_APP_ITEMS
+}
+
 export type DeskInput = ExtrasInput & {
+  /** The readings and notes to show, in order. */
+  items: readonly AppItem[]
   /** The context's size and use; null leaves it to the surface (the desktop's side panel). */
   context: { tokens: number; size: number; percent: number } | null
-  /** Each usage window: its label, how much is used, when it resets (ms). */
-  limits: { label: string; percent: number; resetsAt: number | null }[]
+  /** Each usage window: which one, its label, how much is used, when it resets (ms). */
+  limits: { item: '5h' | '7d' | 'model'; label: string; percent: number; resetsAt: number | null }[]
   /** When the warm prompt cache expires (ms), and how early to warn; null when cold or unknown. */
   cache: { until: number; warnMs: number } | null
   durationMs: number | null
+  /** The session's spend so far; null when unknown. */
+  costUsd: number | null
   now: number
 }
 
@@ -394,25 +412,29 @@ const toneOf = (percent: number): DeskItem['tone'] => (percent >= 90 ? 'bad' : p
  * The HUD for a surface that draws in a proportional face (the desktop app, a
  * phone, an editor): labelled readings the surface lays out as tiles, no text
  * bars, sparklines, glyphs or padded columns, and nothing the desktop already
- * shows (model, effort, project, branch, tools).
+ * shows (model, effort, project, branch, tools). `items` picks them and their order.
  */
 export function deskOf(x: DeskInput): Desk {
-  const gauges: DeskItem[] = []
+  const byItem: Partial<Record<AppItem, DeskItem[]>> = {}
+  const add = (item: AppItem, it: DeskItem) => (byItem[item] ??= []).push(it)
   if (x.context) {
     const { tokens, size, percent } = x.context
-    gauges.push({ label: m('desk.context'), value: `${Math.round(percent)}%`, hint: `${formatTokens(tokens)}/${formatTokens(size)}`, percent, tone: toneOf(percent) })
+    add('context', { label: m('desk.context'), value: `${Math.round(percent)}%`, hint: `${formatTokens(tokens)}/${formatTokens(size)}`, percent, tone: toneOf(percent) })
   }
   for (const w of x.limits) {
     const left = w.resetsAt !== null && w.resetsAt > x.now ? m('desk.resets', { d: formatDuration(w.resetsAt - x.now) }) : undefined
-    gauges.push({ label: w.label, value: `${Math.round(w.percent)}%`, hint: left, percent: w.percent, tone: toneOf(w.percent) })
+    add(w.item, { label: w.label, value: `${Math.round(w.percent)}%`, hint: left, percent: w.percent, tone: toneOf(w.percent) })
   }
   if (x.cache && x.cache.until > x.now) {
-    gauges.push({ label: m('desk.cache'), value: clockTime(x.cache.until), tone: x.cache.until - x.now <= x.cache.warnMs ? 'warn' : undefined })
+    add('cache', { label: m('desk.cache'), value: clockTime(x.cache.until), tone: x.cache.until - x.now <= x.cache.warnMs ? 'warn' : undefined })
   }
-  if (x.durationMs !== null && x.durationMs > 0) gauges.push({ label: m('desk.session'), value: formatDuration(x.durationMs) })
+  if (x.durationMs !== null && x.durationMs > 0) add('session', { label: m('desk.session'), value: formatDuration(x.durationMs) })
+  if (x.costUsd !== null) add('cost', { label: m('desk.cost'), value: money(x.costUsd) })
+  const gauges = x.items.flatMap(item => byItem[item] ?? [])
 
   const notes: DeskItem[] = []
-  if (x.summary) notes.push({ value: x.summary, isMuted: true })
+  if (x.summary && x.items.includes('summary')) notes.push({ value: x.summary, isMuted: true })
+  if (!x.items.includes('alerts')) return { gauges, notes }
   for (const { label, at } of x.exhaust) notes.push({ value: m('forecast', { label, time: clockTime(at) }), tone: 'warn' })
   if (typeof x.compactLeft === 'number') notes.push({ value: m('compact.left', { tokens: formatTokens(Math.max(0, x.compactLeft)) }), tone: 'warn' })
   if (typeof x.coldCache === 'number') notes.push({ value: m('cache.cold', { tokens: formatTokens(x.coldCache) }), tone: 'warn' })

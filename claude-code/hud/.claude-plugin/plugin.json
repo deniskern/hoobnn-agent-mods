@@ -20,9 +20,21 @@
   "userConfig": {
     "visible": {
       "type": "boolean",
-      "title": "Show the HUD",
-      "description": "Draw the HUD; /hud, /hud off and /hud on change this too",
+      "title": "Show in the terminal",
+      "description": "Draw the HUD in the terminal; /hud off and /hud on typed in the terminal change this too, as does the footer button there",
       "default": true
+    },
+    "visibleApp": {
+      "type": "boolean",
+      "title": "Show in the apps",
+      "description": "Draw the HUD in Claude Desktop, the phone app and VS Code; /hud off and /hud on sent from them change this too, as does the footer button there (/hud off all hides both)",
+      "default": true
+    },
+    "appItems": {
+      "type": "string",
+      "title": "Shown in the apps",
+      "description": "What the apps show, in order, comma separated: context, 5h, 7d, model (a model's weekly limit, such as Fable's), cache, session, cost, summary, alerts (forecast, auto-compact, expired cache, growth, budget and git warnings). Empty: all but cost. Claude Desktop shows the context in its own side panel, so the HUD leaves it out there. The terminal's rows follow claude-hud's own config",
+      "default": "context,5h,7d,model,cache,session,summary,alerts"
     },
     "footerButton": {
       "type": "boolean",

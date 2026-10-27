@@ -10,7 +10,7 @@ import './shims/globals.js'
 import { atom, derive, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Desk, DockPet, Fired, HudLine, Remote, StepInfo, ToolStats, TurnCost } from '../types'
+import type { Desk, DockPet, Fired, Hidden, HudLine, Remote, Side, StepInfo, ToolStats, TurnCost } from '../types'
 import { readConfig } from './config.js'
 import { drawDesk, drawPane, drawRows } from './draw.js'
 import { getContextUsage } from './hud/stdin.js'
@@ -39,12 +39,16 @@ import { transcriptData } from './transcript-feed.js'
 const lines = atom({ plugin: 'hud', key: 'lines' } as const, [] as HudLine[])
 // The same readings for a surface that draws in its own type (see deskOf).
 const desk = atom({ plugin: 'hud', key: 'desk' } as const, { gauges: [], notes: [] } as Desk)
-// Set this session by `/hud` or session.start; null in a session resumed or
-// cleared, which gets no session.start: `isHidden` is the `visible` row's then.
-const hiddenSet = atom({ plugin: 'hud', key: 'isHidden' } as const, null as boolean | null)
-// The `visible` row's, set in register.
-let isRowHidden = false
-const isHidden = derive([hiddenSet], set => set ?? isRowHidden)
+// Set per side this session by `/hud`, the footer button or session.start; null in a session
+// resumed or cleared, which gets no session.start: each side follows its row then.
+const hiddenSet = atom({ plugin: 'hud', key: 'hidden' } as const, { terminal: null, app: null } as Hidden)
+// The `visible` and `visibleApp` rows', set in register.
+const rowHidden: Record<Side, boolean> = { terminal: false, app: false }
+const isHidden = derive([hiddenSet], set => ({ terminal: set.terminal ?? rowHidden.terminal, app: set.app ?? rowHidden.app }))
+/** Each side's `/config` row. */
+const VISIBLE_ROW: Record<Side, string> = { terminal: 'visible', app: 'visibleApp' }
+/** The terminal, or an app drawing in its own type (Claude Desktop, a phone, VS Code). */
+const sideOf = (surface: string): Side => (surface === 'terminal' ? 'terminal' : 'app')
 // Session state, so a reload keeps what earlier requests reported.
 const steps = atom({ plugin: 'hud', key: 'step' } as const, {
   model: null,
@@ -149,14 +153,33 @@ async function setTheme($: EngineInterface, picked: Theme, schedule: () => void)
   return { text: m('theme.set', { name: `${picked.name} ${picked.sample}` }) }
 }
 
-/** `/hud [off|on]`: the HUD hidden or shown (no verb toggles), its row written when it changed. */
-async function setHidden($: EngineInterface, verb: string, schedule: () => void): Promise<boolean> {
+/**
+ * `/hud [off|on]`: the HUD hidden or shown on `sides` (no verb toggles: hidden on all of
+ * them, it shows), each side's row written when it changed.
+ */
+async function setHidden($: EngineInterface, verb: string, sides: readonly Side[], schedule: () => void): Promise<boolean> {
   const was = await read($, isHidden)
-  const hidden = switchArg(verb, was)
-  await update($, hiddenSet, () => hidden)
-  if (hidden !== was) await persist(prefsOf($), 'visible', !hidden)
+  const hidden = switchArg(verb, sides.every(side => was[side]))
+  await update($, hiddenSet, set => {
+    const next = { ...set }
+    for (const side of sides) next[side] = hidden
+    return next
+  })
+  for (const side of sides) {
+    if (was[side] !== hidden) await persist(prefsOf($), VISIBLE_ROW[side], !hidden)
+  }
   schedule()
   return hidden
+}
+
+/** `/hud detail` and the apps' button: the details pane opened, or closed when it is open; true when it opened. */
+async function toggleDetail($: EngineInterface): Promise<boolean> {
+  if ((await $.ui.panes()).some(p => p.id === PANE)) {
+    await $.ui.close({ id: PANE })
+    return false
+  }
+  await $.ui.open({ id: PANE, title: m('pane.title') })
+  return true
 }
 
 // Before 0.8 a theme picked with `/hud theme` was kept in the store; it is the `theme` row now.
@@ -164,7 +187,8 @@ const STORE_MOVES = { theme: (kept: unknown) => (findTheme(kept) ? (['theme', fi
 
 export const register: Register = (on, options) => {
   const config = readConfig(options)
-  isRowHidden = !config.isVisible
+  rowHidden.terminal = !config.isVisible
+  rowHidden.app = !config.isVisibleApp
   useTheme(config.theme)
   // A session the desktop app hosts: no terminal, the desktop attached. Its side panel
   // draws the context, so the desktop's HUD leaves it out.
@@ -298,7 +322,7 @@ export const register: Register = (on, options) => {
         // The pet moves in beside the rows when it fits, and out when it does not.
         const widest = Math.max(0, ...all.map(row => row.reduce((sum, span) => sum + cellWidth(span.text), 0)))
         const wasDocked = await read($, isPetDocked)
-        const isDocked = pet !== null && !(await read($, isHidden)) && live.columns !== undefined && dockFits(widest, live.columns, pet.width, wasDocked)
+        const isDocked = pet !== null && !(await read($, isHidden)).terminal && live.columns !== undefined && dockFits(widest, live.columns, pet.width, wasDocked)
         if (isDocked !== wasDocked) await update($, isPetDocked, () => isDocked)
         live.lastLines = all.map(row => row.map(span => span.text).join(''))
         live.lastError = null
@@ -310,16 +334,18 @@ export const register: Register = (on, options) => {
         await update($, desk, () =>
           deskOf({
             ...extrasInput,
+            items: config.appItems,
             context: !isDesktop && used.size > 0 && used.tokens > 0 ? used : null,
             limits: [
-              ...(typeof five?.used_percentage === 'number' ? [{ label: m('limit.fiveHour'), percent: five.used_percentage, resetsAt: five.resets_at ? five.resets_at * 1000 : null }] : []),
+              ...(typeof five?.used_percentage === 'number' ? [{ item: '5h' as const, label: m('limit.fiveHour'), percent: five.used_percentage, resetsAt: five.resets_at ? five.resets_at * 1000 : null }] : []),
               ...(typeof limits?.seven_day?.used_percentage === 'number'
-                ? [{ label: m('limit.sevenDay'), percent: limits.seven_day.used_percentage, resetsAt: limits.seven_day.resets_at ? limits.seven_day.resets_at * 1000 : null }]
+                ? [{ item: '7d' as const, label: m('limit.sevenDay'), percent: limits.seven_day.used_percentage, resetsAt: limits.seven_day.resets_at ? limits.seven_day.resets_at * 1000 : null }]
                 : []),
-              ...scoped.map(w => ({ label: m('limit.scoped', { name: w.name }), percent: w.percent, resetsAt: w.resetsAt === null ? null : w.resetsAt * 1000 })),
+              ...scoped.map(w => ({ item: 'model' as const, label: m('limit.scoped', { name: w.name }), percent: w.percent, resetsAt: w.resetsAt === null ? null : w.resetsAt * 1000 })),
             ],
             cache: cache?.warm && typeof cache.expires_at === 'number' ? { until: cache.expires_at * 1000, warnMs: Math.max(60, ttlSeconds / 5) * 1000 } : null,
             durationMs: stdin.cost?.total_duration_ms ?? null,
+            costUsd: stdin.cost?.total_cost_usd ?? null,
             now,
           }),
         )
@@ -361,12 +387,12 @@ export const register: Register = (on, options) => {
 
     const keptTheme = findTheme((await keptRows(prefsOf($), STORE_MOVES)).theme)
     if (keptTheme) useTheme(keptTheme)
-    await update($, hiddenSet, () => !config.isVisible)
+    await update($, hiddenSet, () => ({ terminal: !config.isVisible, app: !config.isVisibleApp }))
 
     await loadHostFacts(io, config.extraCmd)
     // claude-hud sets its language in each pass; the command's description is read before the first.
     await runWithFacts(async () => setLanguage((await loadConfig()).language))
-    await $.command.register({ name: 'hud', description: m('cmd.description'), argumentHint: '[off|on | detail | theme [name|next|reset]]', immediate: true })
+    await $.command.register({ name: 'hud', description: m('cmd.description'), argumentHint: '[off|on [all] | detail | theme [name|next|reset]]', immediate: true })
     if (config.isDebug) {
       await $.tool.register({
         name: 'hud_debug',
@@ -417,28 +443,29 @@ export const register: Register = (on, options) => {
       if (!picked) return { text: m('theme.unknown', { name: arg, list: names }) }
       return setTheme($, picked, schedule)
     }
-    if (verb === 'detail') {
-      if ((await $.ui.panes()).some(p => p.id === PANE)) {
-        await $.ui.close({ id: PANE })
-        return { text: m('pane.closed') }
-      }
-      await $.ui.open({ id: PANE, title: m('pane.title') })
-      return { text: m('pane.opened') }
-    }
-    const hidden = await setHidden($, verb, schedule)
+    if (verb === 'detail') return { text: m((await toggleDetail($)) ? 'pane.opened' : 'pane.closed') }
+    // Where it was typed: Enter at a terminal's prompt, else an app (the desktop's own
+    // session, a phone over Remote Control). `all` takes both.
+    const here: Side = e.origin.kind === 'composer' && !isHeadless ? 'terminal' : 'app'
+    const isAll = verb === 'all' || arg === 'all'
+    const sides: Side[] = isAll ? ['terminal', 'app'] : [here]
+    const hidden = await setHidden($, verb === 'all' ? '' : verb, sides, schedule)
+    const where = m(isAll ? 'where.all' : here === 'terminal' ? 'where.terminal' : 'where.app')
 
-    return { text: m(hidden ? 'cmd.hidden' : 'cmd.shown') }
+    return { text: m(hidden ? 'cmd.hidden' : 'cmd.shown', { where }) }
   })
 
   // A button in the prompt footer: what `/hud` alone does. Mode labels other plugins add stay beside it.
   if (config.hasFooterButton) {
     on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
-      const hidden = await read($, isHidden)
+      // Its own side's switch: pressed in the desktop app, the terminal's HUD stays.
+      const side = sideOf(e.surface)
+      const hidden = (await read($, isHidden))[side]
       const below = await next(e)
       const { Box, Button } = $.ui.resolve(e)
       return (
         <Box flexDirection="row" alignItems="center" gap={1}>
-          <Button key="hud-toggle" plain dimColor={hidden} label="HUD" onPress={() => setHidden($, '', schedule)} />
+          <Button key="hud-toggle" plain dimColor={hidden} label="HUD" onPress={() => setHidden($, '', [side], schedule)} />
           {below}
         </Box>
       )
@@ -657,13 +684,15 @@ export const register: Register = (on, options) => {
     // Two cells in, as the engine indents the lines under the prompt. Below a terminal's
     // prompt the terminal's width is the one the rows are fitted to.
     if (config.position === 'above' || isHeadless) trackWidth(e.props.bodyColumns - 2)
-    if (e.props.hasSurvey || (await read($, isHidden)) || (await read($, isPicking))) return next(e)
+    if (e.props.hasSurvey || (await read($, isHidden))[sideOf(e.surface)] || (await read($, isPicking))) return next(e)
     // A remote surface draws in its own type: the readings as words, not the terminal's rows.
     if (e.surface !== 'terminal') {
       const shown = await read($, desk)
       if (shown.gauges.length === 0 && shown.notes.length === 0) return next(e)
       const ui = $.ui.resolve(e)
-      return drawDesk({ ...ui, Svg: 'Svg' in ui ? ui.Svg : undefined }, shown, await next(e))
+      // The phone draws no pane: no button that opens one there.
+      const onDetail = e.surface === 'mobile' ? undefined : () => void toggleDetail($)
+      return drawDesk({ ...ui, Svg: 'Svg' in ui ? ui.Svg : undefined }, shown, await next(e), onDetail)
     }
     const rows = await read($, lines)
     if (rows.length === 0) return next(e)
@@ -677,7 +706,7 @@ export const register: Register = (on, options) => {
       if (e.surface !== 'terminal') return next(e)
       trackWidth(e.viewport?.columns)
       const rows = await read($, lines)
-      if (rows.length === 0 || (await read($, isHidden))) {
+      if (rows.length === 0 || (await read($, isHidden)).terminal) {
         return next(e)
       }
       const ui = $.ui.resolve(e)

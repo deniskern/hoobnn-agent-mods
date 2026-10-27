@@ -2,12 +2,17 @@
 // The HUD's language and layout stay claude-hud's own config file's.
 import type { PluginOptions } from 'claude-code'
 
-import { parseThresholds } from './extras.js'
+import { type AppItem, parseAppItems, parseThresholds } from './extras.js'
 import { count, flag, oneOf, text } from './kit/options.js'
 import { findTheme, THEMES, type Theme } from './themes.js'
 
 export type Config = {
+  /** Drawn in the terminal. */
   isVisible: boolean
+  /** Drawn in Claude Desktop and the other apps. */
+  isVisibleApp: boolean
+  /** What the apps show, in order. */
+  appItems: AppItem[]
   /** A HUD button in the prompt footer. */
   hasFooterButton: boolean
   position: 'above' | 'below'
@@ -41,6 +46,8 @@ export type Config = {
 export function readConfig(options: PluginOptions): Config {
   return {
     isVisible: flag(options.visible, true),
+    isVisibleApp: flag(options.visibleApp, true),
+    appItems: parseAppItems(text(options.appItems)),
     hasFooterButton: flag(options.footerButton, true),
     position: oneOf(options.position, ['above', 'below'], 'above'),
     theme: findTheme(options.theme) ?? THEMES[0]!,

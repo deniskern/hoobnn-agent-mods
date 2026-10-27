@@ -59,7 +59,7 @@ The anime themes' mascot changes face with the state: calm, busy while a tool ru
 
 ## Commands
 
-- `/hud`: shows or hides the HUD; `/hud off` and `/hud on` set it (so does the HUD button in the prompt footer).
+- `/hud`: shows or hides the HUD where you are; `/hud off` and `/hud on` set it (so does the HUD button in the prompt footer). The terminal and the apps (Claude Desktop, the phone, VS Code) each have their own switch: typed in the terminal it changes the terminal's, sent from Desktop or from a phone over Remote Control the apps'; `/hud off all` and `/hud on all` set both.
 - `/hud theme [name|next|reset]`: switches the theme.
 - `/hud detail`: opens or closes the detail pane. It works while Claude is busy too.
 
@@ -69,7 +69,9 @@ Set them in `/config`, or under `pluginConfigs` in `~/.claude/settings.json`:
 
 | Option | What it does | Default |
 | --- | --- | --- |
-| `visible` | Show the HUD | on |
+| `visible` | Show the HUD in the terminal | on |
+| `visibleApp` | Show the HUD in Claude Desktop, the phone app and VS Code | on |
+| `appItems` | What the apps show and in what order, comma separated: `context`, `5h`, `7d`, `model` (a model's weekly limit, such as Fable's), `cache` (when the cache expires), `session` (its time), `cost` (its spend), `summary` (the task summary), `alerts` (forecast, auto-compact, expired cache, context growth, budget and git warnings). Empty shows all but `cost`. The terminal's rows follow claude-hud's own config | `context,5h,7d,model,cache,session,summary,alerts` |
 | `footerButton` | Show the HUD toggle button in the prompt footer | on |
 | `position` | `above` the prompt as a band, or `below` it where the statusline sat (Claude Desktop has no such place: there it is always above) | `above` |
 | `theme` | The theme | `classic` |
@@ -125,7 +127,7 @@ Claude Code's statusline stdin carries these; the mod API does not, so the mod w
   - `⚠` uncommitted paths at or past `gitDirtyWarn` and unpushed commits at or past `gitAheadWarn`.
 - Alerts: a toast when context use reaches each of `contextAlerts`, and the 5-hour, 7-day or a model-scoped weekly limit each of `usageAlerts`; once per threshold, again only after the gauge drops 5 points below it (a `/compact`, a reset).
 - Turn done: a turn of the main thread that ran `notifyAfterSeconds` or longer ends with a toast, a notification by the channel you set in Claude Code and, with `notifySound`, a short chime (macOS).
-- Claude Desktop and other surfaces that draw in their own type (a phone, an editor): rather than the terminal's rows, the HUD draws in the surface's own sizes, weights and colors: a small tile per reading, its label and value over a thin bar and when it resets (the limits), the cache's expiry and the session's time beside them, and the extras (summary, forecasts, uncommitted changes) as a line of small words, warnings in the surface's warning color; no text bars, sparklines or glyphs. Desktop's footer and side panel already show the model, effort, project, branch and context, and its transcript the tool calls, so those are left out there.
+- Claude Desktop and other surfaces that draw in their own type (a phone, an editor): rather than the terminal's rows, the HUD draws in the surface's own sizes, weights and colors: the readings with a bar (context, limits) share the band's width in equal columns, each its label and value on one line over a colored bar (amber from 75%, red from 90%) and when it resets; the cache's expiry, the session's time and its cost follow as a label and value at their own width; a quiet Details button at the end opens the details pane. `appItems` picks the readings and their order; and the extras (summary, forecasts, uncommitted changes) as a line of small words, warnings in the surface's warning color; no text bars, sparklines or glyphs. Desktop's footer and side panel already show the model, effort, project, branch and context, and its transcript the tool calls, so those are left out there.
 - `/hud detail` pane: each tool's calls, total and average time and failures this session; the last 8 turns with their time, cost and context growth; subagents; todos; today's and the week's spend.
 - Prompt redraws: right after a compaction, and after `/model` (showing the new model before its first step).
 - Display tweaks over claude-hud: the ` │ ` and ` | ` separators are dimmed; a running tool's file shows relative to the session directory (`◐ Read src/a.ts`); the session duration is `⏱ 12m` and the prompt cache `缓存 至 14:05`, without the emoji-width `⏱️`.

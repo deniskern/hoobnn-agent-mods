@@ -225,12 +225,33 @@ test('a remote surface draws the readings as words; the desktop leaves the conte
   expect(shown).not.toContain('45k/200k')
   expect(shown).toContain('25%')
   expect(shown.some(t => /Opus|◐ Read|[█░│⏱✎⚠]/.test(t))).toBe(false)
-  // A tile per limit: its label, its value, and a bar the app draws.
+  // A tile per limit: its label, its value, and a bar the app stretches to the tile.
   const ui = await $.ui.mount({ plugin: 'hud', surface: 'desktop', ...BAND })
   const bars = await ui.findAll({ type: 'Svg' })
   expect(bars.length).toBeGreaterThan(0)
-  expect(bars[0]!.props.source).toMatch(/^<svg [^>]*width="120"/)
+  expect(bars[0]!.props.source).toMatch(/preserveAspectRatio="none"/)
+  expect(bars[0]!.props.width).toBeUndefined()
+  expect(await ui.find({ type: 'Button', key: 'hud-detail' })).toBeDefined()
   await ui.unmount()
+})
+
+test('appItems picks the apps\' readings and their order, the terminal\'s rows untouched', { options: { appItems: 'cost, 5h, bogus' } }, async ($, on) => {
+  const clock = host(on)
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="core" />
+  })
+  await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+  for (let i = 0; i < 30; i++) await clock.settle()
+  const ui = await $.ui.mount({ plugin: 'hud', surface: 'mobile', ...BAND })
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  await ui.unmount()
+  // In the order given (the cost, then the 5-hour window); the context, not named, stays out.
+  const cost = texts.indexOf('$1.23')
+  expect(cost).toBeGreaterThanOrEqual(0)
+  expect(texts.indexOf('25%')).toBeGreaterThan(cost)
+  expect(texts).not.toContain('45k/200k')
+  expect(await bandText($)).toContain('proj')
 })
 
 test('rc label links the bridge session and names attached clients by surface', async () => {
@@ -703,19 +724,35 @@ test('a theme an older version kept in the store moves to the theme row', { opti
   expect(/ ┃ /.test(shown)).toBe(true)
 })
 
-test('/hud off and on write the visible row', async ($, on) => {
+test('/hud off hides the HUD where it was typed, and writes that side\'s row; all takes both', async ($, on) => {
   const clock = host(on)
   on('ui.render', ($, e) => {
     const { Box } = $.ui.resolve(e)
     return <Box key="core" />
   })
+  const appShows = async () => {
+    const ui = await $.ui.mount({ plugin: 'hud', surface: 'desktop', ...BAND })
+    const shown = (await ui.findAll({ type: 'Text' })).some(t => t.text === '25%')
+    await ui.unmount()
+    return shown
+  }
   await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
   for (let i = 0; i < 30; i++) await clock.settle()
-  expect((await $.command.run({ ...COMMAND, args: 'off' })).text).toBe(m('cmd.hidden'))
+  expect((await $.command.run({ ...COMMAND, args: 'off' })).text).toBe(m('cmd.hidden', { where: m('where.terminal') }))
   expect(await bandText($)).not.toContain('proj')
+  // The desktop app attached to the same session keeps its HUD.
+  expect(await appShows()).toBe(true)
   await $.command.run({ ...COMMAND, args: 'off' })
   await $.command.run({ ...COMMAND, args: '' })
   expect(rows).toEqual([['hud.visible', false], ['hud.visible', true]])
+  // From the phone over Remote Control: the apps' side.
+  expect((await $.command.run({ ...COMMAND, origin: { kind: 'bridge' }, args: 'off' })).text).toBe(m('cmd.hidden', { where: m('where.app') }))
+  expect(await appShows()).toBe(false)
+  expect(await bandText($)).toContain('proj')
+  rows = []
+  expect((await $.command.run({ ...COMMAND, args: 'on all' })).text).toBe(m('cmd.shown', { where: m('where.all') }))
+  expect(rows).toEqual([['hud.visibleApp', true]])
+  expect(await appShows()).toBe(true)
 })
 
 test('powerline puts segments on backgrounds joined by caps, two cells wider', async () => {

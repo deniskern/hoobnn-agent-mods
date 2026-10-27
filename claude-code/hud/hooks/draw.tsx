@@ -53,48 +53,60 @@ export function drawRows(ui: Ui, rows: HudLine[], rest: RenderElement, indent = 
 }
 
 // A bar's track and fill by tone, light then dark: the surface draws an Svg as an
-// image, which follows the system's scheme but not the theme's keys.
+// image, which follows the system's scheme but not the theme's keys. Mid tones that
+// read on both; the fill is colored at rest too, as a gray bar vanishes on the card.
 const BAR = {
-  track: ['#1f1f1f1f', '#ffffff24'],
-  fill: { none: ['#8a8a8e', '#a1a1a6'], warn: ['#c27c0e', '#f0a83b'], bad: ['#d63b3b', '#f26464'] },
+  track: ['#88878033', '#ffffff1f'],
+  fill: { none: ['#1d9e75', '#34c28f'], warn: ['#ba7517', '#e89b2e'], bad: ['#d9443f', '#f26464'] },
 } as const
-const BAR_WIDTH = 120
+const BAR_HEIGHT = 6
+/** The markup's own width: wide, so the bar takes its tile's whole width (`preserveAspectRatio="none"`). */
+const BAR_WIDTH = 1000
+/** A tile's narrowest, in cells: several share the row, and wrap below this. */
+const TILE_MIN = 16
 
-/** A gauge's bar, rounded like the app's own meters, filled to `percent`. */
+/** A gauge's bar, stretched to its tile, filled to `percent`. */
 export function barSvg(percent: number, tone: DeskItem['tone']): string {
-  const [fillLight, fillDark] = BAR.fill[tone ?? 'none']
-  const fill = Math.min(BAR_WIDTH, Math.max(0, percent) / 100 * BAR_WIDTH)
+  const name = tone ?? 'none'
+  const [fillLight, fillDark] = BAR.fill[name]
+  const fill = Math.min(100, Math.max(0, percent))
+  // Class names by tone: a host that inlines several bars in one page keeps each one's color.
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${BAR_WIDTH}" height="4" viewBox="0 0 ${BAR_WIDTH} 4">` +
-    `<style>.t{fill:${BAR.track[0]}}.f{fill:${fillLight}}` +
-    `@media (prefers-color-scheme:dark){.t{fill:${BAR.track[1]}}.f{fill:${fillDark}}}</style>` +
-    `<rect class="t" width="${BAR_WIDTH}" height="4" rx="2"/>` +
-    (fill > 0 ? `<rect class="f" width="${Math.max(4, fill).toFixed(1)}" height="4" rx="2"/>` : '') +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${BAR_WIDTH}" height="${BAR_HEIGHT}" viewBox="0 0 100 ${BAR_HEIGHT}" preserveAspectRatio="none">` +
+    `<style>.hud-t{fill:${BAR.track[0]}}.hud-${name}{fill:${fillLight}}` +
+    `@media (prefers-color-scheme:dark){.hud-t{fill:${BAR.track[1]}}.hud-${name}{fill:${fillDark}}}</style>` +
+    `<rect class="hud-t" width="100" height="${BAR_HEIGHT}"/>` +
+    (fill > 0 ? `<rect class="hud-${name}" width="${Math.max(1, fill).toFixed(1)}" height="${BAR_HEIGHT}"/>` : '') +
     '</svg>'
   )
 }
 
+type DeskUi = Pick<Elements['desktop'], 'Box' | 'Text'> & Partial<Pick<Elements['desktop'], 'Svg' | 'Button'>>
+
 /**
  * The HUD on a surface with a type of its own (the desktop app, a phone, an editor),
- * laid out as the app's own controls are rather than as terminal rows: a tile per
- * gauge, its label and value over a bar and when it resets, then the notes as a
- * line of muted words, a warning in the theme's warning color.
+ * laid out as the app's own controls are rather than as terminal rows: tiles that
+ * share the band's width, each its label and value over a bar and when it resets,
+ * a quiet button to the details pane at the end, then the notes as a line of muted
+ * words, a warning in the theme's warning color.
  */
-export function drawDesk(ui: Pick<Elements['desktop'], 'Box' | 'Text'> & Partial<Pick<Elements['desktop'], 'Svg'>>, desk: Desk, rest: RenderElement): RenderElement {
-  const { Box, Text, Svg } = ui
+export function drawDesk(ui: DeskUi, desk: Desk, rest: RenderElement, onDetail?: () => void): RenderElement {
+  const { Box, Text, Svg, Button } = ui
   const color = (it: DeskItem) => (it.tone === 'bad' ? 'error' : it.tone === 'warn' ? 'warning' : undefined)
+  // A gauge with a bar shares the row's width with the others; a bare reading (the
+  // cache, the session) takes its own width, its value beside its label.
   const tile = (it: DeskItem, key: string) => (
-    <Box key={key} flexDirection="column" rowGap="xs">
-      <Box flexDirection="row" justifyContent="space-between" columnGap="md">
-        <Text size="caption" dimColor>{it.label ?? ''}</Text>
-        <Text size="footnote" weight="semibold" tabular color={color(it)}>
+    <Box key={key} flexDirection="column" rowGap="xs" {...(it.percent === undefined ? { flexShrink: 0 } : { width: 0, flexGrow: 1, minWidth: TILE_MIN })}>
+      <Box flexDirection="row" justifyContent="space-between" columnGap="sm">
+        <Text dimColor wrap="truncate-end">{it.label ?? ''}</Text>
+        <Text weight="semibold" tabular color={color(it)}>
           {it.value}
         </Text>
       </Box>
       {it.percent !== undefined && Svg ? (
-        <Svg source={barSvg(it.percent, it.tone)} alt={`${it.label ?? ''} ${it.value}`} width={BAR_WIDTH} height={4} />
+        <Svg source={barSvg(it.percent, it.tone)} alt={`${it.label ?? ''} ${it.value}`} height={BAR_HEIGHT} />
       ) : null}
-      {it.hint ? <Text size="caption" dimColor tabular>{it.hint}</Text> : null}
+      {it.hint ? <Text size="caption" dimColor tabular wrap="truncate-end">{it.hint}</Text> : null}
     </Box>
   )
   const note = (it: DeskItem, key: string) => (
@@ -105,8 +117,13 @@ export function drawDesk(ui: Pick<Elements['desktop'], 'Box' | 'Text'> & Partial
   return (
     <Box flexDirection="column" rowGap="sm">
       {desk.gauges.length > 0 ? (
-        <Box flexDirection="row" flexWrap="wrap" columnGap="xl" rowGap="sm" alignItems="flex-start">
+        <Box flexDirection="row" flexWrap="wrap" columnGap="xl" rowGap="md" alignItems="flex-start">
           {desk.gauges.map((it, i) => tile(it, `g${i}`))}
+          {onDetail && Button ? (
+            <Box key="detail" flexShrink={0} alignSelf="center">
+              <Button key="hud-detail" plain dimColor label={m('desk.detail')} onPress={onDetail} />
+            </Box>
+          ) : null}
         </Box>
       ) : null}
       {desk.notes.length > 0 ? (

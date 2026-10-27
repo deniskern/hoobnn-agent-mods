@@ -59,7 +59,7 @@ claude plugin install hud@hoobnn-agent-mods
 
 ## 命令
 
-- `/hud`：显示或隐藏 HUD；`/hud off`、`/hud on` 直接设定（输入框底栏的 「HUD」按钮也一样）。
+- `/hud`：在当前端显示或隐藏 HUD；`/hud off`、`/hud on` 直接设定（输入框底栏的「HUD」按钮也一样）。终端和 Claude Desktop 等应用各自开关：在终端里输入只影响终端，在 Desktop 或经远程控制从手机发出只影响应用；`/hud off all`、`/hud on all` 同时作用于两边。
 - `/hud theme [名字|next|reset]`：切换主题。
 - `/hud detail`：打开或关闭详情面板。Claude 工作时也能用。
 
@@ -69,7 +69,9 @@ claude plugin install hud@hoobnn-agent-mods
 
 | 选项 | 作用 | 默认 |
 | --- | --- | --- |
-| `visible` | 显示 HUD | 开 |
+| `visible` | 在终端显示 HUD | 开 |
+| `visibleApp` | 在 Claude Desktop、手机 App 和 VS Code 显示 HUD | 开 |
+| `appItems` | 应用里显示哪些项、按什么顺序，逗号分隔：`context`（上下文）、`5h`、`7d`、`model`（分模型周额度，如 Fable）、`cache`（缓存到期）、`session`（会话时长）、`cost`（本会话花费）、`summary`（任务摘要）、`alerts`（预测、自动压缩、缓存过期、上下文增长、预算、git 等提醒）。留空等于除 `cost` 外全部显示。终端的行由 claude-hud 自己的配置决定 | `context,5h,7d,model,cache,session,summary,alerts` |
 | `footerButton` | 在输入框底栏显示 「HUD」开关按钮 | 开 |
 | `position` | `above` 放在输入框上方，`below` 放在下方原状态栏的位置（Claude Desktop 没有这个位置，那里总在输入框上方） | `above` |
 | `theme` | 主题 | `classic` |
@@ -125,7 +127,7 @@ Claude Code 的状态栏 stdin 里有这些字段，mod API 没有，所以由 m
   - `⚠` 未提交的路径数达到 `gitDirtyWarn`、未推送的提交数达到 `gitAheadWarn` 时提醒。
 - 预警：上下文用量到达 `contextAlerts` 里的每个百分比、5 小时、7 天或按模型计的周额度到达 `usageAlerts` 里的每个百分比时弹 toast；每个阈值只提醒一次，读数回落到阈值以下 5 个百分点（如 `/compact` 或额度重置）后才会再次提醒。
 - 结束提醒：主线程的一轮跑了 `notifyAfterSeconds` 秒或更久时，结束时弹 toast，同时通过你在 Claude Code 里设置的通知渠道发一条系统通知，开启 `notifySound` 时再响一声（macOS）。
-- Claude Desktop 等用自身字体绘制的端（桌面版、手机、编辑器）：HUD 不套用终端的行，改用该端自己的字号、字重和配色绘制：每项读数一张小卡片，标签和数值在上，下面是细进度条和重置时间（额度），另有缓存到期和会话时长；摘要、预测、未提交改动等附加信息排成一行小字，警告用该端的警告色。不画文字进度条、折线和图标字符。桌面版的底栏和侧栏已经显示模型、推理强度、项目、分支和上下文，对话里也有工具调用，所以这几项都不再显示。
+- Claude Desktop 等用自身字体绘制的端（桌面版、手机、编辑器）：HUD 不套用终端的行，改用该端自己的字号、字重和配色绘制：带进度条的读数（上下文、额度）分成等宽的几列铺满整条，每列标签和数值在同一行，下面是一条彩色进度条（75% 起转橙、90% 起转红）和重置时间；缓存到期、会话时长、花费只显示标签和数值，按内容宽度排在后面；最右边是打开详情面板的「详情」按钮。显示哪些项和顺序由 `appItems` 决定；摘要、预测、未提交改动等附加信息排成一行小字，警告用该端的警告色。不画文字进度条、折线和图标字符。桌面版的底栏和侧栏已经显示模型、推理强度、项目、分支和上下文，对话里也有工具调用，所以这几项都不再显示。
 - `/hud detail` 面板：本会话每个工具的调用次数、总耗时、平均耗时和失败数；最近 8 轮的用时、花费和上下文增长；子代理；待办；今天和本周的花费。
 - 及时重画：压缩完成后立即重画；`/model` 之后也会重画（在新模型第一次请求之前就显示它）。
 - 相对 claude-hud 的显示调整：` │ ` 和 ` | ` 分隔符调暗；正在跑的工具涉及的文件显示为相对会话目录的路径（`◐ Read src/a.ts`）；会话时长显示为 `⏱ 12m`，提示缓存显示为 `缓存 至 14:05`，不用占两列宽的 `⏱️`。
