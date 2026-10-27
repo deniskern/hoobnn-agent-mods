@@ -630,7 +630,7 @@ export const register: Register = (on, options) => {
     // Too short or narrow for the pet's block: the pet in one row, the scene left out.
     if (pet && !shown && (e.props.maxRows < PET_ROWS || e.props.bodyColumns < COMPACT_COLUMNS)) {
       const mascot = { text: THEMES[name].sprite.say[0] ?? '', color: THEMES[name].color }
-      return stackAbove(ui, <Box justifyContent="flex-end">{drawPetLine(ui, pet, mascot)}</Box>, await next(e))
+      return stackAbove(ui, <Box justifyContent="flex-end">{drawPetLine(ui, pet, mascot)}</Box>, await next(e), e.surface)
     }
     const band = (
       <Box flexDirection="row" justifyContent="space-between" alignItems="flex-end">
@@ -638,7 +638,7 @@ export const register: Register = (on, options) => {
         {pet ? <Box width={petColumns} justifyContent="flex-end">{drawPet(ui, pet, 'pet')}</Box> : null}
       </Box>
     )
-    return stackAbove(ui, band, await next(e))
+    return stackAbove(ui, band, await next(e), e.surface)
   })
 }
 

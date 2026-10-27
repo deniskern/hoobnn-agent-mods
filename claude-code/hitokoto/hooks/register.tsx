@@ -226,6 +226,6 @@ export const register: Register = (on, options) => {
         {isDaily ? null : <Button key="hitokoto-next" plain dimColor label="↻" onPress={() => void fetchNew($, url, false)} />}
       </Box>
     )
-    return stackAbove(ui, line, await next(e))
+    return stackAbove(ui, line, await next(e), e.surface)
   })
 }

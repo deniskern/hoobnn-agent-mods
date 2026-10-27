@@ -217,7 +217,7 @@ export const register: Register = (on, options) => {
     const snap = await read($, snapshot)
     if (e.props.hasSurvey || snap === null || (await read($, isHidden)) || (await read($, isPicking))) return next(e)
     const ui = $.ui.resolve(e)
-    return stackAbove(ui, drawNodes(ui, snap, config), await next(e))
+    return stackAbove(ui, drawNodes(ui, snap, config), await next(e), e.surface)
   })
 }
 

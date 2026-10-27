@@ -236,7 +236,7 @@ export const register: Register = (on, options) => {
     const running = config.hasAgents ? await read($, agents) : []
     // A press on a subagent's type shows its transcript, as picking it from the tasks list does.
     const view = (agentId: string) => void $.ui.view({ agentId })
-    return stackAbove(ui, drawBoard(ui, now, running, e.props.bodyColumns - 2, config, await $.clock.now(), view), await next(e))
+    return stackAbove(ui, drawBoard(ui, now, running, e.props.bodyColumns - 2, config, await $.clock.now(), view), await next(e), e.surface)
   })
 }
 

@@ -206,7 +206,7 @@ export const register: Register = (on, options) => {
     if (e.props.hasSurvey || r === null || !(await read($, isShown)) || (await read($, isHidden)) || (await read($, isPicking))) return next(e)
     if (await read($, isReplaying)) return next(e)
     const ui = $.ui.resolve(e)
-    return stackAbove(ui, drawReceipt(ui, r, config.flagUnverified, () => void openReplay($)), await next(e))
+    return stackAbove(ui, drawReceipt(ui, r, config.flagUnverified, () => void openReplay($)), await next(e), e.surface)
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
